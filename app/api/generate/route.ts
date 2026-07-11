@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { aiAvailable, callModel, extractJson, extractUrls, fetchUrlText } from "@/lib/ai";
+import { aiAvailable, callModel, callModelWithMeta, extractJson, extractUrls, fetchUrlText } from "@/lib/ai";
 import { ANALYST_SYSTEM, PLANNER_SYSTEM, selectionsBlock } from "@/lib/prompts";
 import { demoPlan } from "@/lib/demo-plan";
+import { indexPromptBlock, selectResources } from "@/lib/resource-index";
 import { verifyPlanLinks } from "@/lib/verify-links";
-import type { LearningPlan } from "@/lib/types";
+import type { LearningPlan, SkillGap } from "@/lib/types";
 
 export const maxDuration = 120;
 
@@ -45,29 +46,47 @@ export async function POST(request: NextRequest) {
       )
     ).filter(Boolean);
 
-    // Stage 1 — Analyst: parse JD, research company/team, map skill gap.
-    const analystOut = await callModel([
-      { role: "system", content: ANALYST_SYSTEM },
-      {
-        role: "user",
-        content: `${selectionsBlock(selections)}\n\nUSER GOAL / JOB DESCRIPTION:\n${prompt}\n\n${fetched.join("\n\n")}`,
-      },
-    ]);
-    const analysis = extractJson<Record<string, unknown>>(analystOut);
+    // Stage 1 — Analyst: parse JD, research company/team LIVE on the web
+    // (OpenRouter :online), map skill gap.
+    const analystRes = await callModelWithMeta(
+      [
+        { role: "system", content: ANALYST_SYSTEM },
+        {
+          role: "user",
+          content: `${selectionsBlock(selections)}\n\nUSER GOAL / JOB DESCRIPTION:\n${prompt}\n\n${fetched.join("\n\n")}`,
+        },
+      ],
+      { web: true }
+    );
+    const analysis = extractJson<{
+      requiredSkills?: Array<{ skill?: string }>;
+      skillGaps?: SkillGap[];
+    }>(analystRes.content);
 
-    // Stage 2 — Planner: free-resource, deep-linked, phased plan.
+    // Stage 2 — Planner: free-resource, deep-linked, phased plan. The
+    // verified resource index for the relevant skills is injected so most
+    // links come from the pre-checked catalog.
+    const skillPhrases = [
+      ...(analysis.requiredSkills || []).map((s) => s.skill || ""),
+      ...(analysis.skillGaps || []).map((g) => g.skill),
+    ];
+    const indexBlock = indexPromptBlock(selectResources(skillPhrases));
     const plannerOut = await callModel([
       { role: "system", content: PLANNER_SYSTEM },
       {
         role: "user",
-        content: `${selectionsBlock(selections)}\n\nANALYST OUTPUT:\n${JSON.stringify(analysis, null, 2)}`,
+        content: `${selectionsBlock(selections)}\n\nANALYST OUTPUT:\n${JSON.stringify(analysis, null, 2)}\n\n${indexBlock}`,
       },
     ]);
     const raw = extractJson<Omit<LearningPlan, "id" | "createdAt" | "goals">>(plannerOut);
 
+    // Surface the Analyst's live-research citations in the plan.
+    const sources = analystRes.sourceUrls.slice(0, 5).map((u) => `Source: ${u}`);
+
     // Stage 3 — link checker: every URL verified or swapped for a safe search link.
     const plan = await verifyPlanLinks({
       ...raw,
+      companyResearch: [...(raw.companyResearch || []), ...sources],
       id: `plan-${crypto.randomUUID().slice(0, 8)}`,
       createdAt: new Date().toISOString(),
       goals: [prompt.slice(0, 200)],

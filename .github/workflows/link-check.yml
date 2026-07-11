@@ -1,0 +1,20 @@
+name: Verify resource index links
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "lib/resource-index.json"
+      - "scripts/check-links.mjs"
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-links.mjs

@@ -11,12 +11,38 @@ export function aiAvailable(): boolean {
   return Boolean(process.env.OPENROUTER_API_KEY);
 }
 
-export async function callModel(messages: ChatMessage[], maxTokens = 8000): Promise<string> {
+/** Live web search is on by default; set LEARNX_WEB_SEARCH=off to disable. */
+function webSearchEnabled(): boolean {
+  return process.env.LEARNX_WEB_SEARCH !== "off";
+}
+
+export type ModelResult = {
+  content: string;
+  /** URLs cited by OpenRouter's web-search plugin (empty when web off). */
+  sourceUrls: string[];
+};
+
+export type CallOptions = {
+  maxTokens?: number;
+  /**
+   * Attach OpenRouter's web-search plugin (":online") so the agent can
+   * research live — used by the Analyst for real company/team research.
+   */
+  web?: boolean;
+};
+
+export async function callModelWithMeta(
+  messages: ChatMessage[],
+  { maxTokens = 8000, web = false }: CallOptions = {}
+): Promise<ModelResult> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("OPENROUTER_API_KEY not set");
 
+  const baseModel = process.env.LEARNX_MODEL || "anthropic/claude-sonnet-4.5";
+  const model = web && webSearchEnabled() ? `${baseModel}:online` : baseModel;
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
+  const timeout = setTimeout(() => controller.abort(), 90_000);
   try {
     const res = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -27,23 +53,32 @@ export async function callModel(messages: ChatMessage[], maxTokens = 8000): Prom
         "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
         "X-Title": "LearnX",
       },
-      body: JSON.stringify({
-        model: process.env.LEARNX_MODEL || "anthropic/claude-sonnet-4.5",
-        max_tokens: maxTokens,
-        messages,
-      }),
+      body: JSON.stringify({ model, max_tokens: maxTokens, messages }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 300)}`);
     }
     const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const message = data?.choices?.[0]?.message;
+    const content = message?.content;
     if (typeof content !== "string") throw new Error("Empty model response");
-    return content;
+
+    const urlSet = new Set<string>();
+    if (Array.isArray(message?.annotations)) {
+      for (const a of message.annotations as Array<{ url_citation?: { url?: string } }>) {
+        const url = a?.url_citation?.url;
+        if (typeof url === "string") urlSet.add(url);
+      }
+    }
+    return { content, sourceUrls: [...urlSet] };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function callModel(messages: ChatMessage[], maxTokens = 8000): Promise<string> {
+  return (await callModelWithMeta(messages, { maxTokens })).content;
 }
 
 /** Pull the first top-level JSON object out of a model response. */

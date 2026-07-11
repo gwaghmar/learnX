@@ -11,7 +11,18 @@ type Props = {
   onAddGoal: (goal: string) => Promise<void>;
   onStartOver: () => void;
   demo?: boolean;
+  /** The "Hours per week to learn" selection, e.g. "5–10 hours". */
+  hoursPerWeek?: string;
 };
+
+/** Turn the hours-per-week selection into a weekly hour budget. */
+function weeklyBudget(selection?: string): number {
+  const nums = (selection?.match(/\d+/g) || []).map(Number);
+  if (!nums.length) return 8;
+  if (selection?.trim().startsWith("<")) return Math.max(2, nums[0] - 1);
+  if (nums.length >= 2) return Math.round((nums[0] + nums[1]) / 2);
+  return selection?.includes("+") ? nums[0] + 2 : nums[0];
+}
 
 const GAP_STYLES: Record<SkillGap["status"], string> = {
   have: "border-emerald-400/40 bg-emerald-400/10 text-emerald-300",
@@ -28,7 +39,7 @@ const KIND_ICONS: Record<string, string> = {
   docs: "📘",
 };
 
-export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onStartOver, demo }: Props) {
+export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onStartOver, demo, hoursPerWeek }: Props) {
   const [newGoal, setNewGoal] = useState("");
   const [expanding, setExpanding] = useState(false);
   const [expandError, setExpandError] = useState("");
@@ -38,6 +49,22 @@ export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onSta
   const totalHours = allItems.reduce((s, i) => s + (i.estimatedHours || 0), 0);
   const doneHours = allItems.filter((i) => tracker[i.id]).reduce((s, i) => s + (i.estimatedHours || 0), 0);
   const pct = allItems.length ? Math.round((doneCount / allItems.length) * 100) : 0;
+
+  // "This week": the next uncompleted items, in plan order, that fit the
+  // user's weekly hour budget (always at least one).
+  const budget = weeklyBudget(hoursPerWeek);
+  const thisWeek = useMemo(() => {
+    const upNext = allItems.filter((i) => !tracker[i.id]);
+    const picked: typeof upNext = [];
+    let hours = 0;
+    for (const item of upNext) {
+      if (picked.length && hours + (item.estimatedHours || 0) > budget) break;
+      picked.push(item);
+      hours += item.estimatedHours || 0;
+      if (hours >= budget) break;
+    }
+    return picked;
+  }, [allItems, tracker, budget]);
 
   const submitGoal = async () => {
     if (!newGoal.trim() || expanding) return;
@@ -105,18 +132,56 @@ export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onSta
         </div>
       </section>
 
+      {/* This week — the plan sliced to the user's weekly hour budget */}
+      {thisWeek.length > 0 && (
+        <section className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-emerald-300">
+            📅 This week (~{budget}h available)
+          </h2>
+          <ul className="space-y-2 text-sm">
+            {thisWeek.map((item) => (
+              <li key={item.id} className="flex items-baseline gap-2">
+                <span className="text-emerald-400">→</span>
+                <span>
+                  {item.title}
+                  <span className="ml-2 text-xs text-white/40">~{item.estimatedHours}h</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Company / team research */}
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
           What the company &amp; team actually do
         </h2>
         <ul className="space-y-2 text-sm leading-relaxed text-white/80">
-          {plan.companyResearch.map((line, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="text-sky-400">{line.startsWith("Verify:") ? "❓" : "•"}</span>
-              <span className={line.startsWith("Verify:") ? "text-amber-200/80" : ""}>{line}</span>
-            </li>
-          ))}
+          {plan.companyResearch.map((line, i) => {
+            if (line.startsWith("Source: ")) {
+              const url = line.slice("Source: ".length).trim();
+              return (
+                <li key={i} className="flex gap-2 text-xs">
+                  <span className="text-sky-400">🔗</span>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="truncate text-sky-300/70 underline decoration-sky-300/30 underline-offset-4 hover:text-sky-200"
+                  >
+                    {url}
+                  </a>
+                </li>
+              );
+            }
+            return (
+              <li key={i} className="flex gap-2">
+                <span className="text-sky-400">{line.startsWith("Verify:") ? "❓" : "•"}</span>
+                <span className={line.startsWith("Verify:") ? "text-amber-200/80" : ""}>{line}</span>
+              </li>
+            );
+          })}
         </ul>
       </section>
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { aiAvailable, callModel, extractJson } from "@/lib/ai";
 import { EXPANDER_SYSTEM, selectionsBlock } from "@/lib/prompts";
+import { indexPromptBlock, selectResources } from "@/lib/resource-index";
 import { verifyPlanLinks } from "@/lib/verify-links";
 import type { LearningPlan } from "@/lib/types";
 
@@ -41,6 +42,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const skillPhrases = [
+      ...(plan.skillGaps || []).map((g) => g.skill),
+      ...newGoal.split(/[\s,/]+/).filter((w) => w.length > 2),
+    ];
+    const indexBlock = indexPromptBlock(selectResources(skillPhrases));
     const out = await callModel([
       { role: "system", content: EXPANDER_SYSTEM },
       {
@@ -54,7 +60,9 @@ ITEM IDS THE USER HAS ALREADY COMPLETED (keep these items untouched):
 ${JSON.stringify(completedItemIds)}
 
 NEW GOAL TO MERGE IN:
-${newGoal}`,
+${newGoal}
+
+${indexBlock}`,
       },
     ]);
     const raw = extractJson<Omit<LearningPlan, "id" | "createdAt" | "goals">>(out);

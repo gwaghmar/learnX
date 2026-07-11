@@ -217,6 +217,7 @@ export default function Home() {
           onAddGoal={addGoal}
           onStartOver={startOver}
           demo={demo}
+          hoursPerWeek={selections.hoursPerWeek}
         />
       )}
     </main>
