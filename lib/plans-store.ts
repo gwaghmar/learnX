@@ -1,4 +1,4 @@
-import type { LearningPlan, Selections, TrackerState } from "./types";
+import type { LearningPlan, MetaState, Selections, TrackerState } from "./types";
 
 /**
  * Client-side plan library (v1): multiple concurrent plans, each with its own
@@ -9,6 +9,8 @@ import type { LearningPlan, Selections, TrackerState } from "./types";
 export type StoredPlan = {
   plan: LearningPlan;
   tracker: TrackerState;
+  /** Per-item notes and skip flags — separate from completion so progress math stays simple. */
+  meta?: MetaState;
   selections: Selections;
   demo?: boolean;
   updatedAt: string;

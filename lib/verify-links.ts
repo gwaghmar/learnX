@@ -37,7 +37,8 @@ async function checkUrl(url: string): Promise<boolean> {
   }
 }
 
-async function verifyResource(r: Resource): Promise<Resource> {
+/** Exported so /api/swap-resource can verify a single replacement link. */
+export async function verifyResource(r: Resource): Promise<Resource> {
   const ok = await checkUrl(r.url);
   if (ok) return { ...r, verified: true };
   const fallback = SEARCH_FALLBACKS.find((f) => f.match.test(r.url));

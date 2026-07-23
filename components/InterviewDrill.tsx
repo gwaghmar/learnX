@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { LearningPlan } from "@/lib/types";
 
 type DrillQuestion = { question: string; whyAsked: string; strongAnswer: string };
@@ -15,6 +15,20 @@ export default function InterviewDrill({ plan }: { plan: LearningPlan }) {
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [speechSupported, setSpeechSupported] = useState(false);
+
+  useEffect(() => {
+    setSpeechSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  const speak = (text: string) => {
+    if (!speechSupported) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+  };
 
   const start = async () => {
     setLoading(true);
@@ -39,6 +53,7 @@ export default function InterviewDrill({ plan }: { plan: LearningPlan }) {
 
   const next = () => {
     if (!questions) return;
+    window.speechSynthesis?.cancel();
     setIdx((i) => (i + 1) % questions.length);
     setRevealed(false);
   };
@@ -75,7 +90,19 @@ export default function InterviewDrill({ plan }: { plan: LearningPlan }) {
 
       {q && (
         <div>
-          <p className="text-base font-medium leading-relaxed">{q.question}</p>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-base font-medium leading-relaxed">{q.question}</p>
+            {speechSupported && (
+              <button
+                onClick={() => speak(q.question)}
+                title="Hear this question read aloud"
+                aria-label="Hear this question read aloud"
+                className="shrink-0 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-sm transition hover:bg-white/10"
+              >
+                🔊
+              </button>
+            )}
+          </div>
           <p className="mt-2 text-xs text-white/45">Why they ask: {q.whyAsked}</p>
 
           {revealed ? (

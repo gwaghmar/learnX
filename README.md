@@ -14,7 +14,9 @@ LearnX is a single-screen AI app: a user pastes (or speaks) a job description or
 6. **Tracks progress** — checkbox tracker with hours + percent complete, persisted locally, plus a **"This week"** section that slices the plan to the user's weekly hour budget.
 7. **Merges new goals** — "also prep me for AWS Solutions Architect" re-runs the agents and rewrites the plan around *both* goals while keeping every completed item checked and untouched.
 
-On top of the pipeline: a **plan library** (multiple concurrent plans, switch/resume/delete), a **daily learning streak**, one-click **Markdown export** and **.ics calendar export** of "this week," and an **interview drill mode** that generates practice questions from the same company research and skill gaps as the plan.
+On top of the pipeline: a **plan library** (multiple concurrent plans, switch/resume/delete), a **daily learning streak**, one-click **Markdown export** and **.ics calendar export** of "this week," and an **interview drill mode** (with 🔊 read-aloud questions) that generates practice questions from the same company research and skill gaps as the plan.
+
+Every part of the plan is actionable, not just readable: **swap** any resource for a different free one covering the same skill (instant via the verified index, or AI-generated on demand), **skip** an item you don't need without losing it, jot a **note** on any item, click a **skill-gap chip** to jump straight to where it's covered, and **share** a read-only link to your plan that others can preview and add to their own library in one click.
 
 **Certification rule:** only certifications any member of the public can take for free are recommended (freeCodeCamp, Google Skillshop, HubSpot Academy, CFI free courses, Kaggle, CS50). Certifications that require an employer to license the system (Workday Pro, NetSuite, customer-tied SAP certs) are explicitly excluded, with free public alternatives suggested instead.
 
@@ -32,28 +34,31 @@ npm run dev                  # http://localhost:3000
 
 ```
 app/
-  page.tsx                 # single-screen flow: plan library → prompt (+ tap-to-speak) → selectors → plan; landing sections (how-it-works, features, FAQ) below the fold
+  page.tsx                 # single-screen flow: plan library → sample-JD quick-start → prompt (+ tap-to-speak) → selectors → plan; landing sections (how-it-works, features, FAQ) below the fold; handles incoming shared-plan links
   api/generate/route.ts    # pipeline: URL fetcher → Analyst agent → Planner agent → link checker
   api/expand/route.ts      # goal merge: Expander agent, preserves completed item ids
   api/drill/route.ts       # interview drill questions generated from the plan's research + gaps
+  api/swap-resource/route.ts # one alternative resource for a skill: verified-index first, AI fallback, link-verified
 components/
   PromptBox.tsx            # textarea + Web Speech API mic button
   SelectField.tsx          # selector that always offers "Help me figure out"
   PlanLibrary.tsx           # saved-plans list on the home screen (resume/delete)
-  PlanView.tsx             # company research, skill-gap chips, phases, tracker, add-a-goal, exports, streak
-  InterviewDrill.tsx        # flashcard-style practice questions with reveal
+  PlanView.tsx             # company research, clickable skill-gap chips, phases (skip/note/swap/copy per item), tracker, add-a-goal, exports, streak, share, toast
+  InterviewDrill.tsx        # flashcard-style practice questions with reveal + 🔊 read-aloud
   Celebration.tsx           # confetti burst on item completion
+  SharedPlanPreview.tsx      # read-only view of an imported shared-plan link, with "add to my plans" CTA
 lib/
   ai.ts                    # OpenRouter client (abort, web-search ':online', citations), URL fetcher
   prompts.ts               # Analyst / Planner / Expander system prompts
   resources.ts             # free-provider catalog + hard rules (certs, deep links)
   resource-index.json      # THE MOAT: curated free resources, link-checked weekly in CI
   resource-index.ts        # skill-matching + prompt injection for the index
-  verify-links.ts          # HEAD-check every resource URL, safe search-URL fallbacks
-  plans-store.ts            # multi-plan localStorage store + streak tracking + v0 migration
+  verify-links.ts          # HEAD-check every resource URL (also used for single-resource swaps), safe search-URL fallbacks
+  plans-store.ts            # multi-plan localStorage store + per-item meta (skip/note) + streak tracking + v0 migration
   export.ts                 # plan → Markdown, "this week" → .ics calendar
+  share.ts                  # plan ↔ shareable URL codec (unicode-safe base64, no backend)
   demo-plan.ts             # keyless demo plan
-  types.ts                 # LearningPlan, Phase, PlanItem, Resource, TrackerState
+  types.ts                 # LearningPlan, Phase, PlanItem, Resource, TrackerState, ItemMeta
 scripts/
   check-links.mjs          # link checker for the index (npm run check-links)
 .github/workflows/
@@ -69,9 +74,9 @@ See [`PRD.md`](./PRD.md) for the full spec. Snapshot:
 - [x] MVP: prompt → agents → free-resource plan → tracker → goal merge
 - [x] Verified resource index + weekly CI link checker + live-cited company research + "this week" view
 - [x] **v1:** plan library (multiple plans), interview drill mode, streaks + celebration, Markdown/.ics export, full landing page
+- [x] **v1.1:** swap any resource, skip/note per item, shareable plan links, sample-JD quick-start, spoken interview questions
 - [ ] Grow the resource index (target 300+ entries across non-tech roles) + auto-repair broken entries
 - [ ] Accounts + Postgres persistence (cross-device sync)
-- [ ] Shareable read-only plan links
 - [ ] Business-readiness mode ("I want to start X business — make me ready to run it")
 - [ ] Mock-interview voice chat
 - [ ] B2B2C: career centers, workforce boards, bootcamps

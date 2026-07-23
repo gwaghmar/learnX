@@ -47,7 +47,7 @@ Per `MARKET_ANALYSIS.md`, chat assistants can generate a decent plan once. Learn
 - Verified resource index (~40 entries) + weekly CI link check
 - Demo mode (fully explorable without an API key)
 
-### 🚀 This release (v1 — "best website" sprint)
+### 🚀 v1 — "best website" sprint
 - **Plan library** — multiple concurrent plans, each with its own tracker; switch, resume, delete; legacy single-plan state migrates automatically
 - **Interview Drill mode** — flashcard-style practice questions generated from the plan's company research + skill gaps, with strong-answer guidance; works in demo mode
 - **Streaks & celebration** — 🔥 daily learning streak; confetti when an item is completed
@@ -55,10 +55,19 @@ Per `MARKET_ANALYSIS.md`, chat assistants can generate a decent plan once. Learn
 - **Real landing page** — hero, how-it-works, feature grid, FAQ, footer; the app is the hero, marketing supports it
 - **PRD** (this document) as the single source of product truth
 
+### 🚀 v1.1 — interactivity pass (nothing static)
+- **Swap any resource** — one click replaces a suggested resource with a different free one for the same skill; checks the verified index first (instant, free), falls back to AI generation + link verification only if nothing indexed
+- **Skip an item** — secondary action next to Complete; skipped items drop out of progress %, hours, and "This week" but stay visible to un-skip
+- **Per-item notes** — free-text field on every item, persisted, for jotting personal progress
+- **Shareable read-only plan links** — one click copies a URL encoding the whole plan (no backend); opening it shows a read-only preview with an "Add to my plans" button — the growth loop moved up from v2
+- **Clickable skill-gap chips** — jump to and highlight the plan item that covers a given skill
+- **Sample JD quick-start** — one-click example prompts (Financial Systems Analyst, Data Analyst, Product Marketing Manager) so a new visitor can see real output before writing anything
+- **Spoken interview questions** — 🔊 read-aloud on every drill question via the Web Speech API, pairing with the existing tap-to-speak input
+- **Copy-link** action on every resource
+
 ### 🔜 Next (v2)
 - Accounts + Postgres persistence (Supabase): plans sync across devices; email nudges ("your 8 hours start tonight")
 - Resource index at 300+ entries across non-tech roles; auto-repair pipeline for broken entries
-- Shareable read-only plan links (the growth loop: "look what I'm learning")
 - Business-readiness mode: "I want to run X business" → operations/finance/marketing plan
 - Mock-interview chat (voice) built on the same company research
 - B2B2C dashboards for career centers & workforce boards

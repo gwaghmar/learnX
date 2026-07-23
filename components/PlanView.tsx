@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import PromptBox from "./PromptBox";
 import InterviewDrill from "./InterviewDrill";
 import Celebration from "./Celebration";
 import { downloadFile, planToMarkdown, thisWeekToICS } from "@/lib/export";
-import type { LearningPlan, SkillGap, TrackerState } from "@/lib/types";
+import { buildShareUrl } from "@/lib/share";
+import type { LearningPlan, MetaState, SkillGap, TrackerState } from "@/lib/types";
 
 type Props = {
   plan: LearningPlan;
   tracker: TrackerState;
+  meta: MetaState;
   onToggleItem: (itemId: string) => void;
+  onSetItemMeta: (itemId: string, patch: { skipped?: boolean; note?: string }) => void;
+  onSwapResource: (itemId: string, resourceIndex: number, skill: string, currentUrl: string) => Promise<void>;
   onAddGoal: (goal: string) => Promise<void>;
   onStartOver: () => void;
   demo?: boolean;
@@ -47,7 +51,10 @@ const KIND_ICONS: Record<string, string> = {
 export default function PlanView({
   plan,
   tracker,
+  meta,
   onToggleItem,
+  onSetItemMeta,
+  onSwapResource,
   onAddGoal,
   onStartOver,
   demo,
@@ -58,6 +65,16 @@ export default function PlanView({
   const [expanding, setExpanding] = useState(false);
   const [expandError, setExpandError] = useState("");
   const [burst, setBurst] = useState(0);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [swappingKey, setSwappingKey] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flash = (msg: string) => {
+    setToast(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(""), 2800);
+  };
 
   const toggle = (itemId: string) => {
     if (!tracker[itemId]) setBurst((b) => b + 1); // celebrate completions only
@@ -65,16 +82,17 @@ export default function PlanView({
   };
 
   const allItems = useMemo(() => plan.phases.flatMap((p) => p.items), [plan]);
-  const doneCount = allItems.filter((i) => tracker[i.id]).length;
-  const totalHours = allItems.reduce((s, i) => s + (i.estimatedHours || 0), 0);
-  const doneHours = allItems.filter((i) => tracker[i.id]).reduce((s, i) => s + (i.estimatedHours || 0), 0);
-  const pct = allItems.length ? Math.round((doneCount / allItems.length) * 100) : 0;
+  // Skipped items don't count toward progress, hours, or "this week" — but stay visible to un-skip.
+  const activeItems = useMemo(() => allItems.filter((i) => !meta[i.id]?.skipped), [allItems, meta]);
+  const doneCount = activeItems.filter((i) => tracker[i.id]).length;
+  const totalHours = activeItems.reduce((s, i) => s + (i.estimatedHours || 0), 0);
+  const doneHours = activeItems.filter((i) => tracker[i.id]).reduce((s, i) => s + (i.estimatedHours || 0), 0);
+  const pct = activeItems.length ? Math.round((doneCount / activeItems.length) * 100) : 0;
 
-  // "This week": the next uncompleted items, in plan order, that fit the
-  // user's weekly hour budget (always at least one).
+  // "This week": the next uncompleted, non-skipped items, in plan order, that fit the budget.
   const budget = weeklyBudget(hoursPerWeek);
   const thisWeek = useMemo(() => {
-    const upNext = allItems.filter((i) => !tracker[i.id]);
+    const upNext = activeItems.filter((i) => !tracker[i.id]);
     const picked: typeof upNext = [];
     let hours = 0;
     for (const item of upNext) {
@@ -84,7 +102,7 @@ export default function PlanView({
       if (hours >= budget) break;
     }
     return picked;
-  }, [allItems, tracker, budget]);
+  }, [activeItems, tracker, budget]);
 
   const submitGoal = async () => {
     if (!newGoal.trim() || expanding) return;
@@ -100,9 +118,60 @@ export default function PlanView({
     }
   };
 
+  const jumpToSkill = (skill: string) => {
+    const s = skill.toLowerCase();
+    const target = allItems.find((i) => i.skills.some((sk) => sk.toLowerCase().includes(s) || s.includes(sk.toLowerCase())));
+    if (!target) {
+      flash(`No single item tags "${skill}" — it's covered across the plan generally.`);
+      return;
+    }
+    document.getElementById(`item-${target.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightId(target.id);
+    setTimeout(() => setHighlightId((h) => (h === target.id ? null : h)), 2200);
+  };
+
+  const handleShare = () => {
+    const url = buildShareUrl(plan);
+    if (!url) {
+      flash("This plan is too large to share via link — try the Markdown export instead.");
+      return;
+    }
+    navigator.clipboard
+      ?.writeText(url)
+      .then(() => flash("🔗 Share link copied to clipboard!"))
+      .catch(() => flash(url));
+  };
+
+  const copyResourceLink = (url: string) => {
+    navigator.clipboard
+      ?.writeText(url)
+      .then(() => flash("Link copied!"))
+      .catch(() => {});
+  };
+
+  const swapResource = async (itemId: string, resourceIndex: number, skill: string, currentUrl: string) => {
+    const key = `${itemId}-${resourceIndex}`;
+    setSwappingKey(key);
+    try {
+      await onSwapResource(itemId, resourceIndex, skill, currentUrl);
+      flash("Swapped in a new resource.");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Couldn't find an alternative right now.");
+    } finally {
+      setSwappingKey(null);
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8 pb-24">
       <Celebration trigger={burst} />
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/15 bg-[#12182a] px-4 py-2 text-sm text-white shadow-xl">
+          {toast}
+        </div>
+      )}
+
       {/* Add another goal — lives on top, per the product spec */}
       <section className="rounded-2xl border border-sky-400/20 bg-sky-400/5 p-5">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-sky-300">
@@ -141,7 +210,10 @@ export default function PlanView({
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="mb-2 flex justify-between text-sm">
             <span className="font-medium">
-              {doneCount}/{allItems.length} items complete
+              {doneCount}/{activeItems.length} items complete
+              {activeItems.length !== allItems.length && (
+                <span className="ml-1 text-white/35">({allItems.length - activeItems.length} skipped)</span>
+              )}
             </span>
             <span className="text-white/50">
               ~{doneHours}h done of ~{totalHours}h · {pct}%
@@ -156,6 +228,12 @@ export default function PlanView({
                 🔥 {streak}-day streak
               </span>
             )}
+            <button
+              onClick={handleShare}
+              className="rounded-full border border-sky-400/30 bg-sky-400/10 px-3 py-1 text-xs text-sky-200 transition hover:bg-sky-400/20"
+            >
+              🔗 Share plan
+            </button>
             <button
               onClick={() => downloadFile(`learnx-${plan.role.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`, planToMarkdown(plan, tracker), "text/markdown")}
               className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70 transition hover:bg-white/10"
@@ -181,12 +259,21 @@ export default function PlanView({
           </h2>
           <ul className="space-y-2 text-sm">
             {thisWeek.map((item) => (
-              <li key={item.id} className="flex items-baseline gap-2">
-                <span className="text-emerald-400">→</span>
-                <span>
-                  {item.title}
-                  <span className="ml-2 text-xs text-white/40">~{item.estimatedHours}h</span>
-                </span>
+              <li key={item.id}>
+                <button
+                  onClick={() => {
+                    document.getElementById(`item-${item.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    setHighlightId(item.id);
+                    setTimeout(() => setHighlightId((h) => (h === item.id ? null : h)), 2200);
+                  }}
+                  className="flex items-baseline gap-2 text-left hover:text-emerald-200"
+                >
+                  <span className="text-emerald-400">→</span>
+                  <span>
+                    {item.title}
+                    <span className="ml-2 text-xs text-white/40">~{item.estimatedHours}h</span>
+                  </span>
+                </button>
               </li>
             ))}
           </ul>
@@ -226,78 +313,134 @@ export default function PlanView({
         </ul>
       </section>
 
-      {/* Skill gap */}
+      {/* Skill gap — click a chip to jump to the plan item that covers it */}
       <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">Your skill gap</h2>
         <div className="flex flex-wrap gap-2">
           {plan.skillGaps.map((gap) => (
-            <span
+            <button
               key={gap.skill}
-              title={gap.note}
-              className={`cursor-help rounded-full border px-3 py-1 text-xs font-medium ${GAP_STYLES[gap.status] || GAP_STYLES.partial}`}
+              title={`${gap.note} — click to jump to where this is covered`}
+              onClick={() => jumpToSkill(gap.skill)}
+              className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition hover:brightness-110 ${GAP_STYLES[gap.status] || GAP_STYLES.partial}`}
             >
               {gap.skill} · {gap.status}
-            </span>
+            </button>
           ))}
         </div>
       </section>
 
       {/* Phases + tracker checkboxes */}
-      {plan.phases.map((phase, pi) => (
+      {plan.phases.map((phase) => (
         <section key={phase.id} className="rounded-2xl border border-white/10 bg-white/5 p-5">
           <h2 className="text-lg font-semibold">{phase.title}</h2>
           <p className="mb-4 mt-1 text-sm text-white/55">{phase.summary}</p>
           <div className="space-y-4">
             {phase.items.map((item) => {
               const done = Boolean(tracker[item.id]);
+              const itemMeta = meta[item.id] || {};
+              const skipped = Boolean(itemMeta.skipped);
+              const highlighted = highlightId === item.id;
               return (
                 <div
                   key={item.id}
-                  className={`rounded-xl border p-4 transition ${
-                    done ? "border-emerald-400/30 bg-emerald-400/5" : "border-white/10 bg-white/[0.03]"
+                  id={`item-${item.id}`}
+                  className={`scroll-mt-24 rounded-xl border p-4 transition ${
+                    highlighted
+                      ? "border-sky-400 ring-2 ring-sky-400/60"
+                      : done
+                      ? "border-emerald-400/30 bg-emerald-400/5"
+                      : skipped
+                      ? "border-white/5 bg-white/[0.02] opacity-60"
+                      : "border-white/10 bg-white/[0.03]"
                   }`}
                 >
-                  <label className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={done}
-                      onChange={() => toggle(item.id)}
-                      className="mt-1 h-5 w-5 shrink-0 accent-emerald-400"
-                    />
-                    <div className="min-w-0">
-                      <div className={`font-medium ${done ? "text-white/45 line-through" : ""}`}>
-                        {item.title}
-                        <span className="ml-2 text-xs font-normal text-white/40">~{item.estimatedHours}h</span>
+                  <div className="flex items-start gap-3">
+                    <label className="flex flex-1 cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={done}
+                        onChange={() => toggle(item.id)}
+                        className="mt-1 h-5 w-5 shrink-0 accent-emerald-400"
+                      />
+                      <div className="min-w-0">
+                        <div className={`font-medium ${done ? "text-white/45 line-through" : ""}`}>
+                          {item.title}
+                          <span className="ml-2 text-xs font-normal text-white/40">~{item.estimatedHours}h</span>
+                          {skipped && (
+                            <span className="ml-2 rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-normal text-white/40">
+                              Skipped
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-white/60">{item.why}</p>
                       </div>
-                      <p className="mt-1 text-sm text-white/60">{item.why}</p>
-                    </div>
-                  </label>
+                    </label>
+                    <button
+                      onClick={() => onSetItemMeta(item.id, { skipped: !skipped })}
+                      title={skipped ? "Bring this item back into your plan" : "Skip — remove from progress and this week"}
+                      className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/50 transition hover:bg-white/10"
+                    >
+                      {skipped ? "↩ Unskip" : "Skip"}
+                    </button>
+                  </div>
+
                   <div className="mt-3 space-y-1.5 pl-8">
-                    {item.resources.map((r, ri) => (
-                      <div key={ri} className="text-sm">
-                        <a
-                          href={r.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sky-300 underline decoration-sky-300/30 underline-offset-4 hover:text-sky-200"
-                        >
-                          {KIND_ICONS[r.kind] || "🔗"} {r.title}
-                        </a>
-                        <span className="ml-2 text-xs text-white/40">{r.provider}</span>
-                        {r.verified === false && (
-                          <span className="ml-2 text-xs text-amber-300/70" title="Original link was unreachable; this goes to the provider's search instead.">
-                            (search link)
-                          </span>
-                        )}
-                        {r.certNote && <div className="text-xs text-emerald-300/70">🏅 {r.certNote}</div>}
-                      </div>
-                    ))}
+                    {item.resources.map((r, ri) => {
+                      const key = `${item.id}-${ri}`;
+                      return (
+                        <div key={ri} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                          <a
+                            href={r.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sky-300 underline decoration-sky-300/30 underline-offset-4 hover:text-sky-200"
+                          >
+                            {KIND_ICONS[r.kind] || "🔗"} {r.title}
+                          </a>
+                          <span className="text-xs text-white/40">{r.provider}</span>
+                          {r.verified === false && (
+                            <span className="text-xs text-amber-300/70" title="Original link was unreachable; this goes to the provider's search instead.">
+                              (search link)
+                            </span>
+                          )}
+                          <button
+                            onClick={() => copyResourceLink(r.url)}
+                            title="Copy link"
+                            aria-label="Copy link"
+                            className="rounded px-1.5 py-0.5 text-xs text-white/30 transition hover:bg-white/10 hover:text-white/60"
+                          >
+                            📋
+                          </button>
+                          <button
+                            onClick={() => swapResource(item.id, ri, item.skills[0] || item.title, r.url)}
+                            disabled={swappingKey === key}
+                            title="Swap for a different free resource"
+                            className="rounded px-1.5 py-0.5 text-xs text-white/30 transition hover:bg-white/10 hover:text-white/60 disabled:opacity-40"
+                          >
+                            {swappingKey === key ? "🔁…" : "🔁 Swap"}
+                          </button>
+                          {r.certNote && <div className="w-full text-xs text-emerald-300/70">🏅 {r.certNote}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-3 pl-8">
+                    <input
+                      type="text"
+                      defaultValue={itemMeta.note || ""}
+                      onBlur={(e) => {
+                        if (e.target.value !== (itemMeta.note || "")) onSetItemMeta(item.id, { note: e.target.value });
+                      }}
+                      placeholder="Add a note about your progress…"
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.02] px-2.5 py-1.5 text-xs text-white/70 placeholder-white/25 outline-none transition focus:border-sky-400/50"
+                    />
                   </div>
                 </div>
               );
             })}
           </div>
-          {pi === plan.phases.length - 1 && null}
         </section>
       ))}
 

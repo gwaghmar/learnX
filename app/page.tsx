@@ -5,6 +5,7 @@ import PromptBox from "@/components/PromptBox";
 import SelectField from "@/components/SelectField";
 import PlanView from "@/components/PlanView";
 import PlanLibrary from "@/components/PlanLibrary";
+import SharedPlanPreview from "@/components/SharedPlanPreview";
 import {
   currentStreak,
   emptySelections,
@@ -13,6 +14,7 @@ import {
   saveStore,
   type PlanStore,
 } from "@/lib/plans-store";
+import { decodePlanFromShare } from "@/lib/share";
 import type { LearningPlan, Selections } from "@/lib/types";
 
 const PIPELINE_STEPS = [
@@ -34,11 +36,13 @@ const HOW_IT_WORKS = [
 
 const FEATURES = [
   { icon: "🆓", title: "100% free resources", text: "freeCodeCamp, Kaggle, MIT OCW, CFI, Microsoft Learn — never a paywall. Certs included only if anyone can take them free." },
-  { icon: "🔗", title: "Every link verified", text: "A curated index link-checked weekly in CI, plus a runtime check on every plan. Clicks land where they should." },
+  { icon: "🔗", title: "Every link verified", text: "A curated index link-checked weekly in CI, plus a runtime check on every plan — and a one-click swap if you'd rather try a different free resource." },
   { icon: "🏢", title: "Real company research", text: "Live web search with cited sources. Anything uncertain is labeled \"Verify:\" — never assumptions dressed as facts." },
   { icon: "🎯", title: "Multi-goal merging", text: "Add \"also AWS Solutions Architect\" and the plan rewrites around both goals — completed work stays done." },
-  { icon: "🎤", title: "Interview drills", text: "Practice the questions this company will actually ask, generated from the same research as your plan." },
+  { icon: "🎤", title: "Interview drills", text: "Practice the questions this company will actually ask — read aloud, generated from the same research as your plan." },
   { icon: "📅", title: "Fits your week", text: "Tell us your hours; get a \"this week\" slice, calendar export, and a streak to keep you honest." },
+  { icon: "🔁", title: "Swap any resource", text: "Don't like a suggested course? Swap it instantly for another free one covering the same skill." },
+  { icon: "🔗", title: "Share your plan", text: "One click copies a read-only link — friends can preview it and add it to their own library." },
 ];
 
 const FAQ = [
@@ -47,22 +51,57 @@ const FAQ = [
   { q: "Do I need an account?", a: "No. Plans and progress live in your browser. Cross-device sync with accounts is on the roadmap." },
   { q: "What if I'm not in tech?", a: "That's the point — financial analysts, ops, marketing, project managers. Most learning tools only serve developers; LearnX plans any role a job description exists for." },
   { q: "Can I prepare for two things at once?", a: "Yes — generate a plan, then use \"add more to your path\" to merge additional roles or certifications. Progress you've already made is always preserved. You can also keep fully separate plans side by side." },
+  { q: "What if I don't like a suggested resource?", a: "Hit \"Swap\" next to it — you'll get a different free resource for the same skill instantly, pulled from the verified index or generated fresh if none is indexed yet." },
+];
+
+const SAMPLES: Array<{ label: string; prompt: string; selections: Partial<Selections> }> = [
+  {
+    label: "Financial Systems Analyst",
+    prompt:
+      "There's a Financial Systems Analyst opening at a mid-size logistics company. The JD asks for advanced Excel, SQL, ERP experience (Oracle or NetSuite), Power BI dashboards, and supporting month-end close. I have an interview next month.",
+    selections: { education: "Bachelor's", experience: "1–3 years", hoursPerWeek: "10–20 hours", timeline: "1 month", background: "Accountant, strong Excel, no SQL" },
+  },
+  {
+    label: "Data Analyst",
+    prompt:
+      "I want to become a Data Analyst at a mid-size e-commerce company. Postings ask for SQL, Python (pandas), A/B testing knowledge, and dashboarding in Looker or Tableau.",
+    selections: { education: "Bachelor's", experience: "None yet", hoursPerWeek: "10–20 hours", timeline: "3 months", background: "Marketing coordinator, comfortable with spreadsheets" },
+  },
+  {
+    label: "Product Marketing Manager",
+    prompt:
+      "Targeting Product Marketing Manager roles at B2B SaaS startups. JDs want positioning/messaging experience, go-to-market planning, competitive analysis, and comfort presenting to sales teams.",
+    selections: { education: "Bachelor's", experience: "3–5 years", hoursPerWeek: "5–10 hours", timeline: "3 months", background: "Content marketer, no formal PMM experience" },
+  },
 ];
 
 export default function Home() {
-  const [view, setView] = useState<"input" | "loading" | "plan">("input");
+  const [view, setView] = useState<"input" | "loading" | "plan" | "shared">("input");
   const [prompt, setPrompt] = useState("");
   const [selections, setSelections] = useState<Selections>(emptySelections());
   const [store, setStore] = useState<PlanStore>({ plans: {}, activeId: null });
   const [streak, setStreak] = useState(0);
   const [error, setError] = useState("");
   const [step, setStep] = useState(0);
+  const [sharedPlan, setSharedPlan] = useState<LearningPlan | null>(null);
 
-  // Restore the plan library on load; jump straight to the active plan.
+  // Restore the plan library on load; handle an incoming shared-plan link first.
   useEffect(() => {
     const s = loadStore();
     setStore(s);
     setStreak(currentStreak());
+
+    const sharedParam = new URLSearchParams(window.location.search).get("shared");
+    if (sharedParam) {
+      const decoded = decodePlanFromShare(sharedParam);
+      window.history.replaceState({}, "", window.location.pathname);
+      if (decoded) {
+        setSharedPlan(decoded);
+        setView("shared");
+        return;
+      }
+    }
+
     if (s.activeId && s.plans[s.activeId]) {
       setSelections(s.plans[s.activeId].selections);
       setView("plan");
@@ -86,6 +125,12 @@ export default function Home() {
 
   const setSel = (key: keyof Selections) => (v: string) => setSelections((s) => ({ ...s, [key]: v }));
 
+  const applySample = (sample: (typeof SAMPLES)[number]) => {
+    setPrompt(sample.prompt);
+    setSelections((s) => ({ ...s, ...sample.selections }));
+    document.getElementById("build-plan-btn")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
   const generate = async () => {
     setError("");
     setView("loading");
@@ -101,7 +146,14 @@ export default function Home() {
       update({
         plans: {
           ...store.plans,
-          [plan.id]: { plan, tracker: {}, selections, demo: Boolean(data.demo), updatedAt: new Date().toISOString() },
+          [plan.id]: {
+            plan,
+            tracker: {},
+            meta: {},
+            selections,
+            demo: Boolean(data.demo),
+            updatedAt: new Date().toISOString(),
+          },
         },
         activeId: plan.id,
       });
@@ -153,6 +205,48 @@ export default function Home() {
     });
   };
 
+  const setItemMeta = (itemId: string, patch: { skipped?: boolean; note?: string }) => {
+    if (!active || !store.activeId) return;
+    const meta = { ...(active.meta || {}) };
+    meta[itemId] = { ...meta[itemId], ...patch };
+    update({
+      ...store,
+      plans: {
+        ...store.plans,
+        [store.activeId]: { ...active, meta, updatedAt: new Date().toISOString() },
+      },
+    });
+  };
+
+  const swapResource = async (itemId: string, resourceIndex: number, skill: string, currentUrl: string) => {
+    if (!active || !store.activeId) return;
+    const res = await fetch("/api/swap-resource", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ skill, excludeUrl: currentUrl, role: active.plan.role }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "No alternative available");
+    const nextPlan: LearningPlan = {
+      ...active.plan,
+      phases: active.plan.phases.map((phase) => ({
+        ...phase,
+        items: phase.items.map((item) =>
+          item.id === itemId
+            ? { ...item, resources: item.resources.map((r, i) => (i === resourceIndex ? data.resource : r)) }
+            : item
+        ),
+      })),
+    };
+    update({
+      ...store,
+      plans: {
+        ...store.plans,
+        [store.activeId]: { ...active, plan: nextPlan, updatedAt: new Date().toISOString() },
+      },
+    });
+  };
+
   const selectPlan = (planId: string) => {
     const entry = store.plans[planId];
     if (!entry) return;
@@ -167,6 +261,29 @@ export default function Home() {
     update({ plans, activeId: store.activeId === planId ? null : store.activeId });
   };
 
+  const importSharedPlan = () => {
+    if (!sharedPlan) return;
+    const newId = store.plans[sharedPlan.id] ? `plan-${Date.now().toString(36)}` : sharedPlan.id;
+    const importedPlan: LearningPlan = { ...sharedPlan, id: newId };
+    const nextSelections = emptySelections();
+    const next: PlanStore = {
+      plans: {
+        ...store.plans,
+        [newId]: { plan: importedPlan, tracker: {}, meta: {}, selections: nextSelections, updatedAt: new Date().toISOString() },
+      },
+      activeId: newId,
+    };
+    update(next);
+    setSelections(nextSelections);
+    setSharedPlan(null);
+    setView("plan");
+  };
+
+  const dismissSharedPlan = () => {
+    setSharedPlan(null);
+    setView(active ? "plan" : "input");
+  };
+
   const backToHome = () => {
     update({ ...store, activeId: null });
     setView("input");
@@ -174,6 +291,10 @@ export default function Home() {
 
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:py-16">
+      {view === "shared" && sharedPlan && (
+        <SharedPlanPreview plan={sharedPlan} onImport={importSharedPlan} onDismiss={dismissSharedPlan} />
+      )}
+
       {view === "input" && (
         <div className="mx-auto max-w-2xl">
           <header className="fade-up mb-10 text-center">
@@ -187,6 +308,19 @@ export default function Home() {
           </header>
 
           <PlanLibrary store={store} onSelect={selectPlan} onDelete={deletePlan} />
+
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium uppercase tracking-wider text-white/40">Try a sample:</span>
+            {SAMPLES.map((sample) => (
+              <button
+                key={sample.label}
+                onClick={() => applySample(sample)}
+                className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70 transition hover:border-sky-400/40 hover:bg-white/10"
+              >
+                {sample.label}
+              </button>
+            ))}
+          </div>
 
           <PromptBox
             value={prompt}
@@ -240,6 +374,7 @@ export default function Home() {
           )}
 
           <button
+            id="build-plan-btn"
             onClick={generate}
             disabled={prompt.trim().length < 10}
             className="mt-8 w-full rounded-2xl bg-gradient-to-r from-sky-500 to-emerald-500 py-4 text-lg font-bold text-white shadow-lg shadow-sky-500/20 transition hover:brightness-110 disabled:opacity-40 disabled:shadow-none"
@@ -284,6 +419,14 @@ export default function Home() {
                 </div>
               ))}
             </div>
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => document.getElementById("build-plan-btn")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+                className="rounded-full border border-sky-400/30 bg-sky-400/10 px-5 py-2 text-sm font-medium text-sky-200 transition hover:bg-sky-400/20"
+              >
+                Try it now ↑
+              </button>
+            </div>
           </section>
 
           <section className="mt-16">
@@ -319,7 +462,10 @@ export default function Home() {
         <PlanView
           plan={active.plan}
           tracker={active.tracker}
+          meta={active.meta || {}}
           onToggleItem={toggleItem}
+          onSetItemMeta={setItemMeta}
+          onSwapResource={swapResource}
           onAddGoal={addGoal}
           onStartOver={backToHome}
           demo={active.demo}

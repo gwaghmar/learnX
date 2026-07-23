@@ -64,6 +64,12 @@ export type LearningPlan = {
 /** itemId -> completed */
 export type TrackerState = Record<string, boolean>;
 
+/** Per-item extras that aren't "done or not": a personal note, or skipped-from-the-plan. */
+export type ItemMeta = { skipped?: boolean; note?: string };
+
+/** itemId -> meta */
+export type MetaState = Record<string, ItemMeta>;
+
 export type GenerateRequest = {
   prompt: string;
   selections: Selections;
