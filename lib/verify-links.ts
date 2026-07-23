@@ -18,6 +18,11 @@ const SEARCH_FALLBACKS: Array<{ match: RegExp; search: (q: string) => string }> 
   { match: /ocw\.mit\.edu/, search: (q) => `https://ocw.mit.edu/search/?q=${encodeURIComponent(q)}` },
   { match: /alison\.com/, search: (q) => `https://alison.com/courses?query=${encodeURIComponent(q)}` },
   { match: /trailhead\.salesforce\.com/, search: (q) => `https://trailhead.salesforce.com/search?keywords=${encodeURIComponent(q)}` },
+  { match: /academy\.hubspot\.com/, search: (q) => `https://academy.hubspot.com/courses?query=${encodeURIComponent(q)}` },
+  { match: /score\.org/, search: () => `https://www.score.org/` },
+  { match: /sba\.gov/, search: () => `https://www.sba.gov/business-guide` },
+  { match: /canva\.com/, search: () => `https://www.canva.com/designschool/` },
+  { match: /productschool\.com/, search: () => `https://productschool.com/free-product-management-resources/` },
 ];
 
 async function checkUrl(url: string): Promise<boolean> {

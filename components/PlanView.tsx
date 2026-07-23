@@ -76,6 +76,7 @@ export default function PlanView({
   const [focusMode, setFocusMode] = useState(false);
   // Per-phase collapse override — undefined means "use the smart default".
   const [manualOpen, setManualOpen] = useState<Record<string, boolean>>({});
+  const isBusiness = plan.mode === "business";
 
   const flash = (msg: string) => {
     setToast(msg);
@@ -202,7 +203,9 @@ export default function PlanView({
       <section>
         <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="text-2xl font-bold">{plan.role}</h1>
-          {plan.company && <span className="text-sm text-white/50">Target: {plan.company}</span>}
+          {plan.company && (
+            <span className="text-sm text-white/50">{isBusiness ? "Target market" : "Target"}: {plan.company}</span>
+          )}
         </div>
         <div className="mb-2 flex flex-wrap gap-2">
           {plan.goals.map((g, i) => (
@@ -340,10 +343,10 @@ export default function PlanView({
             </section>
           )}
 
-          {/* Company / team research */}
+          {/* Company / team research (or market research, in business mode) */}
           <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-              What the company &amp; team actually do
+              {isBusiness ? "Market & industry research" : "What the company & team actually do"}
             </h2>
             <ul className="space-y-2 text-sm leading-relaxed text-white/80">
               {plan.companyResearch.map((line, i) => {
@@ -375,7 +378,9 @@ export default function PlanView({
 
           {/* Skill gap — click a chip to jump to the plan item that covers it */}
           <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">Your skill gap</h2>
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
+              {isBusiness ? "Your business capability gap" : "Your skill gap"}
+            </h2>
             <div className="flex flex-wrap gap-2">
               {plan.skillGaps.map((gap) => (
                 <button
@@ -529,10 +534,12 @@ export default function PlanView({
             );
           })}
 
-          {/* Interview prep */}
+          {/* Interview prep (or launch checklist, in business mode) */}
           {plan.interviewPrep?.length > 0 && (
             <section className="rounded-2xl border border-white/10 bg-white/5 p-5">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">Interview prep</h2>
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
+                {isBusiness ? "Launch checklist" : "Interview prep"}
+              </h2>
               <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-white/80">
                 {plan.interviewPrep.map((tip, i) => (
                   <li key={i}>{tip}</li>
@@ -541,8 +548,8 @@ export default function PlanView({
             </section>
           )}
 
-          {/* Interview drill — practice from the same research */}
-          <InterviewDrill plan={plan} />
+          {/* Interview drill — practice from the same research (job mode only; a business has no interviewer) */}
+          {!isBusiness && <InterviewDrill plan={plan} />}
         </>
       )}
 

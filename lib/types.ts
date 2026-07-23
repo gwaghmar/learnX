@@ -52,6 +52,8 @@ export type LearningPlan = {
   createdAt: string;
   /** All goals folded into this plan, in the order they were added. */
   goals: string[];
+  /** "business" reinterprets company/skillGaps/interviewPrep as market research, capabilities, and a launch checklist. Defaults to "job" when absent. */
+  mode?: "job" | "business";
   role: string;
   company?: string;
   /** Facts about the company/team. Uncertain items are prefixed "Verify:". */

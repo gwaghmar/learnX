@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { aiAvailable, callModel, callModelWithMeta, extractJson, extractUrls, fetchUrlText } from "@/lib/ai";
-import { ANALYST_SYSTEM, PLANNER_SYSTEM, selectionsBlock } from "@/lib/prompts";
-import { demoPlan } from "@/lib/demo-plan";
+import { ANALYST_SYSTEM, PLANNER_SYSTEM, modeAddendum, selectionsBlock } from "@/lib/prompts";
+import { demoPlan, demoBusinessPlan } from "@/lib/demo-plan";
 import { indexPromptBlock, selectResources } from "@/lib/resource-index";
 import { verifyPlanLinks } from "@/lib/verify-links";
 import type { LearningPlan, SkillGap } from "@/lib/types";
@@ -18,6 +18,7 @@ const BodySchema = z.object({
     timeline: z.string().max(200),
     background: z.string().max(2_000),
   }),
+  mode: z.enum(["job", "business"]).optional().default("job"),
 });
 
 export async function POST(request: NextRequest) {
@@ -27,10 +28,10 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid request" }, { status: 400 });
     }
-    const { prompt, selections } = parsed.data;
+    const { prompt, selections, mode } = parsed.data;
 
     if (!aiAvailable()) {
-      const plan = demoPlan(prompt.slice(0, 120));
+      const plan = mode === "business" ? demoBusinessPlan(prompt.slice(0, 120)) : demoPlan(prompt.slice(0, 120));
       return NextResponse.json({ plan, demo: true });
     }
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
         { role: "system", content: ANALYST_SYSTEM },
         {
           role: "user",
-          content: `${selectionsBlock(selections)}\n\nUSER GOAL / JOB DESCRIPTION:\n${prompt}\n\n${fetched.join("\n\n")}`,
+          content: `${selectionsBlock(selections)}\n\nUSER GOAL / JOB DESCRIPTION:\n${prompt}\n\n${fetched.join("\n\n")}${modeAddendum(mode)}`,
         },
       ],
       { web: true }
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
       { role: "system", content: PLANNER_SYSTEM },
       {
         role: "user",
-        content: `${selectionsBlock(selections)}\n\nANALYST OUTPUT:\n${JSON.stringify(analysis, null, 2)}\n\n${indexBlock}`,
+        content: `${selectionsBlock(selections)}\n\nANALYST OUTPUT:\n${JSON.stringify(analysis, null, 2)}\n\n${indexBlock}${modeAddendum(mode)}`,
       },
     ]);
     const raw = extractJson<Omit<LearningPlan, "id" | "createdAt" | "goals">>(plannerOut);
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
       id: `plan-${crypto.randomUUID().slice(0, 8)}`,
       createdAt: new Date().toISOString(),
       goals: [prompt.slice(0, 200)],
+      mode,
     });
 
     console.log(JSON.stringify({ route: "generate", ms: Date.now() - started, status: 200 }));

@@ -9,6 +9,7 @@ export function demoPlan(goal: string): LearningPlan {
     id: `plan-demo`,
     createdAt: new Date().toISOString(),
     goals: [goal || "Financial Systems Analyst (sample)"],
+    mode: "job",
     role: "Financial Systems Analyst",
     company: "Sample Corp",
     companyResearch: [
@@ -110,6 +111,118 @@ export function demoPlan(goal: string): LearningPlan {
       "Prepare a STAR story about automating a manual reporting process.",
       "Practice explaining a reconciliation you'd debug: data source → transformation → report.",
       "Ask the interviewer: what does the close calendar look like, and where does this role own it?",
+    ],
+  };
+}
+
+/**
+ * Demo-mode plan for Business-Readiness Mode (no OPENROUTER_API_KEY set).
+ * Same schema as demoPlan(), reinterpreted per lib/prompts.ts's modeAddendum:
+ * "interviewPrep" becomes a launch checklist, "companyResearch" becomes
+ * market research, "skillGaps" become business capabilities.
+ */
+export function demoBusinessPlan(goal: string): LearningPlan {
+  return {
+    id: `plan-demo-business`,
+    createdAt: new Date().toISOString(),
+    goals: [goal || "Freelance bookkeeping practice (sample)"],
+    mode: "business",
+    role: "Freelance Bookkeeping Practice",
+    company: "Local small businesses",
+    companyResearch: [
+      "Demo mode: set OPENROUTER_API_KEY to get real market research for your specific idea.",
+      "Bookkeeping for small businesses is typically billed monthly ($200–$800/client depending on transaction volume) or hourly.",
+      "Most clients need: monthly reconciliation, categorization, basic financial statements, and tax-season handoff to a CPA.",
+      "Verify: local licensing requirements — most U.S. states don't require a special license for bookkeeping (unlike accounting/CPA work), but check yours.",
+    ],
+    skillGaps: [
+      { skill: "Bookkeeping fundamentals (double-entry, reconciliation)", status: "partial", note: "Core service you're selling — needs to be rock solid before your first client." },
+      { skill: "QuickBooks / accounting software", status: "missing", note: "Most small-business clients already use QuickBooks or Wave; you need to be fluent in at least one." },
+      { skill: "Business registration & basic legal setup", status: "missing", note: "LLC/sole prop, EIN, business bank account — do this before you take payment." },
+      { skill: "Pricing & client acquisition", status: "missing", note: "The single biggest reason freelance bookkeeping practices stall is no repeatable way to find clients." },
+    ],
+    phases: [
+      {
+        id: "phase-foundations",
+        title: "Phase 1 — Bookkeeping foundations",
+        summary: "Get genuinely good at the service before you sell it.",
+        items: [
+          {
+            id: "bookkeeping-basics",
+            title: "Learn double-entry bookkeeping",
+            why: "This is the actual service — clients are paying for accuracy and reliability here.",
+            skills: ["Bookkeeping", "Accounting"],
+            estimatedHours: 15,
+            resources: [
+              { title: "Intuit Bookkeeping (audit)", provider: "Coursera", url: "https://www.coursera.org/professional-certificates/intuit-bookkeeping", kind: "course", certNote: "Free to audit; certificate costs money" },
+              { title: "Accounting Fundamentals (free)", provider: "Corporate Finance Institute", url: "https://corporatefinanceinstitute.com/course/learn-accounting-fundamentals-corporate-finance/", kind: "certification", certNote: "Free course, open to anyone" },
+            ],
+          },
+          {
+            id: "quickbooks-fluency",
+            title: "Get fluent in QuickBooks Online",
+            why: "The tool your clients already use — you need to move fast in it from day one.",
+            skills: ["QuickBooks", "Accounting software"],
+            estimatedHours: 10,
+            resources: [
+              { title: "QuickBooks tutorials — search results", provider: "YouTube", url: "https://www.youtube.com/results?search_query=quickbooks+online+tutorial+for+bookkeepers", kind: "video" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "phase-setup",
+        title: "Phase 2 — Legal & business setup",
+        summary: "The unglamorous but non-negotiable steps before you take your first dollar.",
+        items: [
+          {
+            id: "business-registration",
+            title: "Register your business and open a business bank account",
+            why: "Commingling personal and business money is the #1 mistake new freelancers make.",
+            skills: ["Business registration", "Legal setup"],
+            estimatedHours: 6,
+            resources: [
+              { title: "SBA free business guide", provider: "U.S. Small Business Administration", url: "https://www.sba.gov/business-guide", kind: "docs" },
+              { title: "IRS Small Business & Self-Employed Tax Center", provider: "IRS", url: "https://www.irs.gov/businesses/small-businesses-self-employed", kind: "docs" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "phase-clients",
+        title: "Phase 3 — Pricing & your first clients",
+        summary: "Turn the skill into an actual, paying practice.",
+        items: [
+          {
+            id: "pricing-model",
+            title: "Set your pricing and service packages",
+            why: "Undercharging is the second-biggest reason bookkeeping practices stall out.",
+            skills: ["Pricing", "Business planning"],
+            estimatedHours: 5,
+            resources: [
+              { title: "SCORE free mentorship & templates", provider: "SCORE", url: "https://www.score.org/", kind: "article" },
+            ],
+          },
+          {
+            id: "first-clients",
+            title: "Land your first 3 clients",
+            why: "Proof of concept — everything after this gets easier with real references.",
+            skills: ["Sales", "Marketing", "Networking"],
+            estimatedHours: 10,
+            resources: [
+              { title: "Y Combinator Startup School", provider: "Y Combinator", url: "https://www.startupschool.org/", kind: "course", certNote: "Free, open to anyone" },
+            ],
+          },
+        ],
+      },
+    ],
+    interviewPrep: [
+      "Register your business name and get an EIN from the IRS (free, takes 10 minutes online).",
+      "Open a dedicated business bank account before accepting any payment.",
+      "Set your pricing before you talk to a single prospect — decide monthly retainer vs. hourly now.",
+      "Write a one-page service description you can send to a prospective client today.",
+      "Ask 5 people in your network if they know a small business owner who does their own books.",
+      "Set up QuickBooks Online for yourself first — practice on your own numbers before a client's.",
     ],
   };
 }

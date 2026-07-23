@@ -63,7 +63,9 @@ const FAQ = [
   { q: "What if I don't like a suggested resource?", a: "Hit \"Swap\" next to it — you'll get a different free resource for the same skill instantly, pulled from the verified index or generated fresh if none is indexed yet." },
 ];
 
-const SAMPLES: Array<{ label: string; prompt: string; selections: Partial<Selections> }> = [
+type Sample = { label: string; prompt: string; selections: Partial<Selections> };
+
+const JOB_SAMPLES: Sample[] = [
   {
     label: "Financial Systems Analyst",
     prompt:
@@ -84,6 +86,21 @@ const SAMPLES: Array<{ label: string; prompt: string; selections: Partial<Select
   },
 ];
 
+const BUSINESS_SAMPLES: Sample[] = [
+  {
+    label: "Freelance bookkeeping",
+    prompt:
+      "I want to start a freelance bookkeeping practice serving local small businesses. I have basic accounting knowledge but no clients or business setup yet.",
+    selections: { education: "Bachelor's", experience: "1–3 years", hoursPerWeek: "10–20 hours", timeline: "3 months", background: "Worked in an accounting department, comfortable with spreadsheets" },
+  },
+  {
+    label: "Freelance web design business",
+    prompt:
+      "I want to start a freelance web design business for small local businesses — building simple marketing websites and handling basic hosting/maintenance.",
+    selections: { education: "Bachelor's", experience: "None yet", hoursPerWeek: "10–20 hours", timeline: "3 months", background: "Comfortable with computers, no professional design or dev experience" },
+  },
+];
+
 export default function Home() {
   const [view, setView] = useState<"input" | "loading" | "plan" | "shared">("input");
   const [prompt, setPrompt] = useState("");
@@ -98,6 +115,7 @@ export default function Home() {
   const [notifsSupported, setNotifsSupported] = useState(false);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [learnMoreOpen, setLearnMoreOpen] = useState(false);
+  const [mode, setMode] = useState<"job" | "business">("job");
 
   // Restore the plan library on load; handle an incoming shared-plan link first.
   useEffect(() => {
@@ -143,7 +161,7 @@ export default function Home() {
 
   const setSel = (key: keyof Selections) => (v: string) => setSelections((s) => ({ ...s, [key]: v }));
 
-  const applySample = (sample: (typeof SAMPLES)[number]) => {
+  const applySample = (sample: Sample) => {
     setPrompt(sample.prompt);
     setSelections((s) => ({ ...s, ...sample.selections }));
     setCustomizeOpen(true); // so users can see (and tweak) what the sample filled in
@@ -157,7 +175,7 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, selections }),
+        body: JSON.stringify({ prompt, selections, mode }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
@@ -364,16 +382,44 @@ export default function Home() {
               Learn<span className="text-sky-400">X</span>
             </h1>
             <p className="mx-auto mt-3 max-w-xl text-lg text-white/60">
-              Paste the job. Get the plan. Land the role —{" "}
-              <span className="text-emerald-300">without paying for a single course.</span>
+              {mode === "business" ? (
+                <>
+                  Describe the business you want to start. Get the plan. Launch it —{" "}
+                  <span className="text-emerald-300">without paying for a single course.</span>
+                </>
+              ) : (
+                <>
+                  Paste the job. Get the plan. Land the role —{" "}
+                  <span className="text-emerald-300">without paying for a single course.</span>
+                </>
+              )}
             </p>
           </header>
 
           <PlanLibrary store={store} onSelect={selectPlan} onDelete={deletePlan} />
 
+          <div className="mb-4 flex justify-center gap-2 rounded-full border border-white/10 bg-white/5 p-1 text-sm">
+            <button
+              onClick={() => setMode("job")}
+              className={`flex-1 rounded-full px-4 py-2 transition ${
+                mode === "job" ? "bg-sky-500 font-semibold text-white" : "text-white/50 hover:text-white/80"
+              }`}
+            >
+              🧑‍💼 Get a job
+            </button>
+            <button
+              onClick={() => setMode("business")}
+              className={`flex-1 rounded-full px-4 py-2 transition ${
+                mode === "business" ? "bg-emerald-500 font-semibold text-white" : "text-white/50 hover:text-white/80"
+              }`}
+            >
+              🚀 Start a business
+            </button>
+          </div>
+
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium uppercase tracking-wider text-white/40">Try a sample:</span>
-            {SAMPLES.map((sample) => (
+            {(mode === "business" ? BUSINESS_SAMPLES : JOB_SAMPLES).map((sample) => (
               <button
                 key={sample.label}
                 onClick={() => applySample(sample)}
@@ -388,7 +434,9 @@ export default function Home() {
             value={prompt}
             onChange={setPrompt}
             placeholder={
-              'e.g. "There\'s a Financial Systems Analyst opening at Acme Corp — here\'s the JD: … Prepare me for the interview." (paste the posting link and we\'ll read it)'
+              mode === "business"
+                ? 'e.g. "I want to start a freelance bookkeeping practice serving local small businesses. I have basic accounting knowledge but no clients yet."'
+                : 'e.g. "There\'s a Financial Systems Analyst opening at Acme Corp — here\'s the JD: … Prepare me for the interview." (paste the posting link and we\'ll read it)'
             }
           />
 
@@ -452,7 +500,7 @@ export default function Home() {
             disabled={prompt.trim().length < 10}
             className="mt-8 w-full rounded-2xl bg-gradient-to-r from-sky-500 to-emerald-500 py-4 text-lg font-bold text-white shadow-lg shadow-sky-500/20 transition hover:brightness-110 disabled:opacity-40 disabled:shadow-none"
           >
-            Build my plan
+            {mode === "business" ? "Build my launch plan" : "Build my plan"}
           </button>
           <p className="mt-3 text-center text-xs text-white/35">
             Free resources only · free certifications anyone can take · every link verified
@@ -526,6 +574,21 @@ export default function Home() {
                   </details>
                 ))}
               </div>
+            </section>
+
+            <section className="mt-16 rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6 text-center">
+              <h2 className="text-xl font-bold">For career centers, bootcamps &amp; workforce boards</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-white/60">
+                Give every student or job-seeker you serve a personalized, verified-free-resource plan instead of a
+                generic handout — with progress you can see. Cohort dashboards and seat-based access are in
+                development; write in and we&rsquo;ll loop you into early access.
+              </p>
+              <a
+                href="mailto:hello@learnx.app?subject=LearnX%20for%20teams"
+                className="mt-4 inline-block rounded-full border border-emerald-400/40 bg-emerald-400/10 px-5 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-400/20"
+              >
+                ✉️ Get in touch
+              </a>
             </section>
 
             <footer className="mt-16 border-t border-white/10 pt-6 text-center text-xs text-white/30">

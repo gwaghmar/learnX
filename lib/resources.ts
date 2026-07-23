@@ -45,6 +45,17 @@ Practice / Interview
 - interviewing.io learn — https://interviewing.io/learn — free interview guides.
 - Glassdoor interview questions — https://www.glassdoor.com/Interview/index.htm — company-specific questions.
 
+Project Management / UX / Product / Ops / HR / Cybersecurity / Cloud
+- Asana Academy, Atlassian Agile Coach, Figma Academy, NN/g articles, Product School free resources — all free, no login walls.
+- TryHackMe, Cybrary, OWASP — free cybersecurity practice and docs.
+- Kubernetes.io tutorials, docker-curriculum.com — free DevOps/cloud docs.
+
+Entrepreneurship / Small Business (for business-readiness plans)
+- SBA business guide — https://www.sba.gov/business-guide — the U.S. government's free small-business playbook.
+- SCORE — https://www.score.org/ — free mentorship, templates, workshops.
+- Y Combinator Startup School — https://www.startupschool.org/ — free, open to anyone.
+- IRS Small Business & Self-Employed Tax Center — https://www.irs.gov/businesses/small-businesses-self-employed — free official tax guidance.
+
 HARD RULES ABOUT CERTIFICATIONS:
 - Only recommend certifications that ANY member of the public can register for and complete free of charge (freeCodeCamp, Kaggle, Google Skillshop, HubSpot Academy, CFI free tier, IBM SkillsBuild, CS50).
 - NEVER recommend certifications that require an employer to own/license the system, e.g. Workday Pro, NetSuite (SuiteFoundation requires partner/customer access), SAP certifications tied to customer systems, Oracle Cloud certs requiring paid exams. If such a system appears in the JD, say exactly that, and point to the closest FREE public alternative (vendor free training, YouTube deep-dives, community sandboxes like Salesforce Developer Edition, SAP Learning Hub free tier).

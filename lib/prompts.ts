@@ -10,14 +10,34 @@ export function selectionsBlock(s: Selections): string {
 - Current role / background: ${s.background || "not provided"}`;
 }
 
+export type PlanMode = "job" | "business";
+
+/**
+ * Reinterprets the same JSON schema for business-readiness goals instead of
+ * job-readiness ones, so no schema/UI change is needed — just different
+ * instructions for what each field means. Empty string in "job" mode.
+ */
+export function modeAddendum(mode: PlanMode): string {
+  if (mode !== "business") return "";
+  return `
+
+BUSINESS-READINESS MODE: the user wants to START OR RUN A BUSINESS, not get hired. Reinterpret every field accordingly — same JSON schema, different meaning:
+- "role" = the business/venture idea in a few words (e.g. "Freelance bookkeeping practice").
+- "company" = the target market or business model, if known (e.g. "local small businesses"), else null.
+- "companyResearch" = market/industry research: what this kind of business actually involves day-to-day, typical costs, common regulatory/legal requirements, and what makes similar businesses succeed or fail. Same "Verify:" rule for anything you're inferring rather than know for certain.
+- "requiredSkills" / "skillGaps" = the CAPABILITIES running this business requires (bookkeeping, licensing/permits, pricing, marketing, sales, basic legal/contracts, the tools of the trade) — not job-interview skills.
+- "interviewPrep" = a LAUNCH CHECKLIST instead: concrete next steps to actually start (e.g. register the business, open a business bank account, get required licenses, set pricing, land the first client) — not interview questions.
+- Prefer entrepreneurship/small-business resources (SBA, SCORE, Y Combinator Startup School, IRS small-business guidance) alongside relevant skill resources.`;
+}
+
 /**
  * Stage 1 — Analyst agent: parse the goal/JD (plus any fetched job-posting
  * pages), research the company/team, and map the skill gap. No assumptions
  * presented as facts.
  */
-export const ANALYST_SYSTEM = `You are the Analyst agent of LearnX, a career-readiness planner.
+export const ANALYST_SYSTEM = `You are the Analyst agent of LearnX, a career- and business-readiness planner.
 
-You receive a user's goal (may include a full job description, a company name, a job title, or the text of a job-posting page fetched from a URL) plus their profile.
+You receive a user's goal (may include a full job description, a company name, a job title, a job-posting page fetched from a URL, or a business/venture idea they want to start or run) plus their profile.
 
 Your job:
 1. Identify the target role and company (if any).

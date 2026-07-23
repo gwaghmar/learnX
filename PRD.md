@@ -74,13 +74,18 @@ Per `MARKET_ANALYSIS.md`, chat assistants can generate a decent plan once. Learn
 - **Silent desktop reminders** — opt-in, no sound, ever: a notification when a focus-timer session ends, and at most one gentle nudge a day if the streak hasn't been touched yet. Tab must be open (no backend/push yet — see v2).
 - **Copy-as-checklist** — one click copies "this week" as a plain-text checklist for pasting into Todoist/Reminders/Notion, on top of the existing .ics export.
 
-### 🔜 Next (v2)
-- Accounts + Postgres persistence (Supabase): plans sync across devices
-- Background push notifications (service worker) so reminders work even with the tab closed — today's notifications only fire while the tab is open
-- Resource index at 300+ entries across non-tech roles; auto-repair pipeline for broken entries
-- Business-readiness mode: "I want to run X business" → operations/finance/marketing plan
-- Mock-interview chat (voice) built on the same company research
-- B2B2C dashboards for career centers & workforce boards
+### 🚀 v1.3 — business mode, bigger index, voice coaching, B2B2C surface
+- **Business-Readiness Mode** — a "🧑‍💼 Get a job / 🚀 Start a business" toggle. Same agent pipeline and JSON schema, reinterpreted: "company" → target market, "companyResearch" → market/industry research, "skillGaps" → business capabilities (bookkeeping, licensing, pricing, marketing…), "interviewPrep" → a launch checklist. Two business sample prompts (freelance bookkeeping, freelance web design) plus a keyless demo plan.
+- **Resource index grown from ~40 to 83 entries** — added project management, UX/product design, HR/people ops, cybersecurity, DevOps/cloud, healthcare admin, education, legal, supply chain, and a dedicated entrepreneurship/small-business cluster (SBA, SCORE, Y Combinator Startup School, IRS small-business guidance) feeding Business Mode.
+- **Voice interview coaching** — record a spoken (or typed) answer to any drill question and get brief, specific AI feedback comparing it to the "strong answer" guidance, without ever rewriting the answer for you. A lighter, fully self-contained take on a mock interview (no new infra).
+- **B2B2C landing surface** — a "for career centers, bootcamps & workforce boards" section with a contact link; full cohort dashboards remain a v2 item (see below).
+
+### 🔜 Next (v2) — needs real infrastructure decisions, not yet built
+- **Accounts + Postgres persistence (Supabase)**: plans sync across devices. Deliberately not started — it needs a real Supabase project provisioned under the owner's account (none of the existing projects are for LearnX) and can't be verified end-to-end in a browser-less environment. Scoped as its own dedicated pass once a project is designated.
+- **Background push notifications**: needs a service worker, VAPID keys, and subscription storage — same infra dependency as accounts, plus it's untestable without a real HTTPS browser session. Today's notifications (PRD v1.2) work great but only while the tab is open.
+- Resource index at 300+ entries; auto-repair pipeline for broken entries.
+- Full B2B2C dashboards (cohort view, seat management, admin roles) beyond the landing-page surface shipped in v1.3.
+- Deployment: the repo still isn't connected to a live URL — see README for the one remaining manual step.
 
 ## 6. UX principles
 
