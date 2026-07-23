@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import PromptBox from "./PromptBox";
+import InterviewDrill from "./InterviewDrill";
+import Celebration from "./Celebration";
+import { downloadFile, planToMarkdown, thisWeekToICS } from "@/lib/export";
 import type { LearningPlan, SkillGap, TrackerState } from "@/lib/types";
 
 type Props = {
@@ -13,6 +16,8 @@ type Props = {
   demo?: boolean;
   /** The "Hours per week to learn" selection, e.g. "5–10 hours". */
   hoursPerWeek?: string;
+  /** Current daily learning streak (days). */
+  streak?: number;
 };
 
 /** Turn the hours-per-week selection into a weekly hour budget. */
@@ -39,10 +44,25 @@ const KIND_ICONS: Record<string, string> = {
   docs: "📘",
 };
 
-export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onStartOver, demo, hoursPerWeek }: Props) {
+export default function PlanView({
+  plan,
+  tracker,
+  onToggleItem,
+  onAddGoal,
+  onStartOver,
+  demo,
+  hoursPerWeek,
+  streak = 0,
+}: Props) {
   const [newGoal, setNewGoal] = useState("");
   const [expanding, setExpanding] = useState(false);
   const [expandError, setExpandError] = useState("");
+  const [burst, setBurst] = useState(0);
+
+  const toggle = (itemId: string) => {
+    if (!tracker[itemId]) setBurst((b) => b + 1); // celebrate completions only
+    onToggleItem(itemId);
+  };
 
   const allItems = useMemo(() => plan.phases.flatMap((p) => p.items), [plan]);
   const doneCount = allItems.filter((i) => tracker[i.id]).length;
@@ -82,6 +102,7 @@ export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onSta
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8 pb-24">
+      <Celebration trigger={burst} />
       {/* Add another goal — lives on top, per the product spec */}
       <section className="rounded-2xl border border-sky-400/20 bg-sky-400/5 p-5">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-sky-300">
@@ -128,6 +149,26 @@ export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onSta
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-white/10">
             <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {streak > 0 && (
+              <span className="rounded-full border border-orange-400/40 bg-orange-400/10 px-3 py-1 text-xs font-medium text-orange-300">
+                🔥 {streak}-day streak
+              </span>
+            )}
+            <button
+              onClick={() => downloadFile(`learnx-${plan.role.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`, planToMarkdown(plan, tracker), "text/markdown")}
+              className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70 transition hover:bg-white/10"
+            >
+              ⬇ Download plan (.md)
+            </button>
+            <button
+              onClick={() => downloadFile("learnx-this-week.ics", thisWeekToICS(thisWeek, plan.role), "text/calendar")}
+              disabled={!thisWeek.length}
+              className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70 transition hover:bg-white/10 disabled:opacity-40"
+            >
+              📅 This week → calendar (.ics)
+            </button>
           </div>
         </div>
       </section>
@@ -220,7 +261,7 @@ export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onSta
                     <input
                       type="checkbox"
                       checked={done}
-                      onChange={() => onToggleItem(item.id)}
+                      onChange={() => toggle(item.id)}
                       className="mt-1 h-5 w-5 shrink-0 accent-emerald-400"
                     />
                     <div className="min-w-0">
@@ -272,10 +313,13 @@ export default function PlanView({ plan, tracker, onToggleItem, onAddGoal, onSta
         </section>
       )}
 
+      {/* Interview drill — practice from the same research */}
+      <InterviewDrill plan={plan} />
+
       <div className="flex items-center justify-between text-sm text-white/40">
         {demo && <span>Demo plan — set OPENROUTER_API_KEY for real generation.</span>}
         <button onClick={onStartOver} className="ml-auto underline underline-offset-4 hover:text-white/70">
-          Start over with a new plan
+          ← All plans / start a new one
         </button>
       </div>
     </div>

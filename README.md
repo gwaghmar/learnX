@@ -1,6 +1,8 @@
 # LearnX
 
-**Paste a job description. Get job-ready with a plan built from 100% free resources.**
+**Paste the job. Get the plan. Land the role — without paying for a single course.**
+
+> Full product spec, feature checklist, and roadmap: [`PRD.md`](./PRD.md). Market research behind the positioning: [`MARKET_ANALYSIS.md`](./MARKET_ANALYSIS.md).
 
 LearnX is a single-screen AI app: a user pastes (or speaks) a job description or career goal — e.g. *"There's a Financial Systems Analyst opening at Acme, here's the JD, I have an interview"* — picks a few details about themselves (with a **"Help me figure out"** escape hatch on every question), and a multi-agent pipeline:
 
@@ -11,6 +13,8 @@ LearnX is a single-screen AI app: a user pastes (or speaks) a job description or
 5. **Verifies every link** — each resource URL is HEAD-checked server-side at generation time too; dead deep links are swapped for the provider's search page so a click always lands somewhere real.
 6. **Tracks progress** — checkbox tracker with hours + percent complete, persisted locally, plus a **"This week"** section that slices the plan to the user's weekly hour budget.
 7. **Merges new goals** — "also prep me for AWS Solutions Architect" re-runs the agents and rewrites the plan around *both* goals while keeping every completed item checked and untouched.
+
+On top of the pipeline: a **plan library** (multiple concurrent plans, switch/resume/delete), a **daily learning streak**, one-click **Markdown export** and **.ics calendar export** of "this week," and an **interview drill mode** that generates practice questions from the same company research and skill gaps as the plan.
 
 **Certification rule:** only certifications any member of the public can take for free are recommended (freeCodeCamp, Google Skillshop, HubSpot Academy, CFI free courses, Kaggle, CS50). Certifications that require an employer to license the system (Workday Pro, NetSuite, customer-tied SAP certs) are explicitly excluded, with free public alternatives suggested instead.
 
@@ -28,13 +32,17 @@ npm run dev                  # http://localhost:3000
 
 ```
 app/
-  page.tsx                 # single-screen flow: prompt (+ tap-to-speak) → selectors → plan
+  page.tsx                 # single-screen flow: plan library → prompt (+ tap-to-speak) → selectors → plan; landing sections (how-it-works, features, FAQ) below the fold
   api/generate/route.ts    # pipeline: URL fetcher → Analyst agent → Planner agent → link checker
   api/expand/route.ts      # goal merge: Expander agent, preserves completed item ids
+  api/drill/route.ts       # interview drill questions generated from the plan's research + gaps
 components/
   PromptBox.tsx            # textarea + Web Speech API mic button
   SelectField.tsx          # selector that always offers "Help me figure out"
-  PlanView.tsx             # company research, skill-gap chips, phases, tracker, add-a-goal
+  PlanLibrary.tsx           # saved-plans list on the home screen (resume/delete)
+  PlanView.tsx             # company research, skill-gap chips, phases, tracker, add-a-goal, exports, streak
+  InterviewDrill.tsx        # flashcard-style practice questions with reveal
+  Celebration.tsx           # confetti burst on item completion
 lib/
   ai.ts                    # OpenRouter client (abort, web-search ':online', citations), URL fetcher
   prompts.ts               # Analyst / Planner / Expander system prompts
@@ -42,6 +50,8 @@ lib/
   resource-index.json      # THE MOAT: curated free resources, link-checked weekly in CI
   resource-index.ts        # skill-matching + prompt injection for the index
   verify-links.ts          # HEAD-check every resource URL, safe search-URL fallbacks
+  plans-store.ts            # multi-plan localStorage store + streak tracking + v0 migration
+  export.ts                 # plan → Markdown, "this week" → .ics calendar
   demo-plan.ts             # keyless demo plan
   types.ts                 # LearningPlan, Phase, PlanItem, Resource, TrackerState
 scripts/
@@ -50,19 +60,18 @@ scripts/
   link-check.yml           # weekly cron + PR check on index changes
 ```
 
-State is client-side (`localStorage`) in the MVP — no accounts, no database. See the roadmap.
+State is client-side (`localStorage`) in v1 — no accounts, no database yet. See `PRD.md` for the v2 persistence plan.
 
 ## Roadmap
 
-Informed by the market analysis in [`MARKET_ANALYSIS.md`](./MARKET_ANALYSIS.md) — the moats are the **verified free-resource index**, the **persistent tracker**, and **progress-preserving goal merge**; the JD parse and gap report are table stakes.
+See [`PRD.md`](./PRD.md) for the full spec. Snapshot:
 
-- [x] MVP: prompt → agents → free-resource plan → tracker → goal merge (this repo)
-- [x] Curated, continuously re-verified resource index (weekly CI link checker) preferred over per-request link generation — kills link rot, cuts LLM cost
-- [x] Live web search in the Analyst agent (company research with cited sources)
-- [x] Weekly schedule view ("your 8 hours this week")
+- [x] MVP: prompt → agents → free-resource plan → tracker → goal merge
+- [x] Verified resource index + weekly CI link checker + live-cited company research + "this week" view
+- [x] **v1:** plan library (multiple plans), interview drill mode, streaks + celebration, Markdown/.ics export, full landing page
 - [ ] Grow the resource index (target 300+ entries across non-tech roles) + auto-repair broken entries
-- [ ] Accounts + Postgres persistence (plans, tracker, multiple concurrent plans)
-- [ ] Calendar export for the weekly schedule
+- [ ] Accounts + Postgres persistence (cross-device sync)
+- [ ] Shareable read-only plan links
 - [ ] Business-readiness mode ("I want to start X business — make me ready to run it")
-- [ ] Interview drill mode generated from the same company research
+- [ ] Mock-interview voice chat
 - [ ] B2B2C: career centers, workforce boards, bootcamps

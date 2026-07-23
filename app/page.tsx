@@ -4,19 +4,16 @@ import { useEffect, useState } from "react";
 import PromptBox from "@/components/PromptBox";
 import SelectField from "@/components/SelectField";
 import PlanView from "@/components/PlanView";
-import type { LearningPlan, Selections, TrackerState } from "@/lib/types";
-
-const PLAN_KEY = "learnx:plan";
-const TRACKER_KEY = "learnx:tracker";
-const SELECTIONS_KEY = "learnx:selections";
-
-const EMPTY_SELECTIONS: Selections = {
-  education: "",
-  experience: "",
-  hoursPerWeek: "",
-  timeline: "",
-  background: "",
-};
+import PlanLibrary from "@/components/PlanLibrary";
+import {
+  currentStreak,
+  emptySelections,
+  loadStore,
+  recordCompletionToday,
+  saveStore,
+  type PlanStore,
+} from "@/lib/plans-store";
+import type { LearningPlan, Selections } from "@/lib/types";
 
 const PIPELINE_STEPS = [
   "Reading your job description…",
@@ -28,30 +25,47 @@ const PIPELINE_STEPS = [
   "Assembling your plan…",
 ];
 
+const HOW_IT_WORKS = [
+  { icon: "📋", title: "Paste the job", text: "A JD, a posting link, or just \"prep me for X\" — typed or spoken." },
+  { icon: "🔎", title: "Agents research", text: "We read the real posting, research the company live, and map your gap." },
+  { icon: "🗺️", title: "Get your plan", text: "Phased, sized to your hours, built only from verified free resources." },
+  { icon: "✅", title: "Track to hired", text: "Weekly slices, streaks, interview drills — momentum until the offer." },
+];
+
+const FEATURES = [
+  { icon: "🆓", title: "100% free resources", text: "freeCodeCamp, Kaggle, MIT OCW, CFI, Microsoft Learn — never a paywall. Certs included only if anyone can take them free." },
+  { icon: "🔗", title: "Every link verified", text: "A curated index link-checked weekly in CI, plus a runtime check on every plan. Clicks land where they should." },
+  { icon: "🏢", title: "Real company research", text: "Live web search with cited sources. Anything uncertain is labeled \"Verify:\" — never assumptions dressed as facts." },
+  { icon: "🎯", title: "Multi-goal merging", text: "Add \"also AWS Solutions Architect\" and the plan rewrites around both goals — completed work stays done." },
+  { icon: "🎤", title: "Interview drills", text: "Practice the questions this company will actually ask, generated from the same research as your plan." },
+  { icon: "📅", title: "Fits your week", text: "Tell us your hours; get a \"this week\" slice, calendar export, and a streak to keep you honest." },
+];
+
+const FAQ = [
+  { q: "Is it really free?", a: "The resources in every plan are 100% free to consume — that's a hard rule in the planning engine, not a marketing claim. Certifications are only recommended if any member of the public can complete them at no cost." },
+  { q: "What about certifications that need an employer's system?", a: "Vendor certs like Workday Pro or NetSuite require a company license — we never recommend those. If the job needs one of those systems, the plan says so explicitly and routes you to the best free public alternative." },
+  { q: "Do I need an account?", a: "No. Plans and progress live in your browser. Cross-device sync with accounts is on the roadmap." },
+  { q: "What if I'm not in tech?", a: "That's the point — financial analysts, ops, marketing, project managers. Most learning tools only serve developers; LearnX plans any role a job description exists for." },
+  { q: "Can I prepare for two things at once?", a: "Yes — generate a plan, then use \"add more to your path\" to merge additional roles or certifications. Progress you've already made is always preserved. You can also keep fully separate plans side by side." },
+];
+
 export default function Home() {
   const [view, setView] = useState<"input" | "loading" | "plan">("input");
   const [prompt, setPrompt] = useState("");
-  const [selections, setSelections] = useState<Selections>(EMPTY_SELECTIONS);
-  const [plan, setPlan] = useState<LearningPlan | null>(null);
-  const [tracker, setTracker] = useState<TrackerState>({});
-  const [demo, setDemo] = useState(false);
+  const [selections, setSelections] = useState<Selections>(emptySelections());
+  const [store, setStore] = useState<PlanStore>({ plans: {}, activeId: null });
+  const [streak, setStreak] = useState(0);
   const [error, setError] = useState("");
   const [step, setStep] = useState(0);
 
-  // Restore a saved plan + tracker on load.
+  // Restore the plan library on load; jump straight to the active plan.
   useEffect(() => {
-    try {
-      const savedPlan = localStorage.getItem(PLAN_KEY);
-      const savedTracker = localStorage.getItem(TRACKER_KEY);
-      const savedSelections = localStorage.getItem(SELECTIONS_KEY);
-      if (savedPlan) {
-        setPlan(JSON.parse(savedPlan));
-        setTracker(savedTracker ? JSON.parse(savedTracker) : {});
-        if (savedSelections) setSelections(JSON.parse(savedSelections));
-        setView("plan");
-      }
-    } catch {
-      /* corrupted local state — start fresh */
+    const s = loadStore();
+    setStore(s);
+    setStreak(currentStreak());
+    if (s.activeId && s.plans[s.activeId]) {
+      setSelections(s.plans[s.activeId].selections);
+      setView("plan");
     }
   }, []);
 
@@ -63,10 +77,11 @@ export default function Home() {
     return () => clearInterval(t);
   }, [view]);
 
-  const persist = (nextPlan: LearningPlan, nextTracker: TrackerState) => {
-    localStorage.setItem(PLAN_KEY, JSON.stringify(nextPlan));
-    localStorage.setItem(TRACKER_KEY, JSON.stringify(nextTracker));
-    localStorage.setItem(SELECTIONS_KEY, JSON.stringify(selections));
+  const active = store.activeId ? store.plans[store.activeId] : null;
+
+  const update = (next: PlanStore) => {
+    setStore(next);
+    saveStore(next);
   };
 
   const setSel = (key: keyof Selections) => (v: string) => setSelections((s) => ({ ...s, [key]: v }));
@@ -82,10 +97,15 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
-      setPlan(data.plan);
-      setTracker({});
-      setDemo(Boolean(data.demo));
-      persist(data.plan, {});
+      const plan: LearningPlan = data.plan;
+      update({
+        plans: {
+          ...store.plans,
+          [plan.id]: { plan, tracker: {}, selections, demo: Boolean(data.demo), updatedAt: new Date().toISOString() },
+        },
+        activeId: plan.id,
+      });
+      setPrompt("");
       setView("plan");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -94,33 +114,61 @@ export default function Home() {
   };
 
   const addGoal = async (newGoal: string) => {
-    if (!plan) return;
-    const completedItemIds = Object.keys(tracker).filter((id) => tracker[id]);
+    if (!active) return;
+    const completedItemIds = Object.keys(active.tracker).filter((id) => active.tracker[id]);
     const res = await fetch("/api/expand", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, newGoal, selections, completedItemIds }),
+      body: JSON.stringify({ plan: active.plan, newGoal, selections: active.selections, completedItemIds }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to merge the new goal");
-    setPlan(data.plan);
-    persist(data.plan, tracker);
-  };
-
-  const toggleItem = (itemId: string) => {
-    setTracker((t) => {
-      const next = { ...t, [itemId]: !t[itemId] };
-      if (plan) persist(plan, next);
-      return next;
+    update({
+      ...store,
+      plans: {
+        ...store.plans,
+        [data.plan.id]: { ...active, plan: data.plan, updatedAt: new Date().toISOString() },
+      },
+      activeId: data.plan.id,
     });
   };
 
-  const startOver = () => {
-    localStorage.removeItem(PLAN_KEY);
-    localStorage.removeItem(TRACKER_KEY);
-    setPlan(null);
-    setTracker({});
-    setPrompt("");
+  const toggleItem = (itemId: string) => {
+    if (!active || !store.activeId) return;
+    const completing = !active.tracker[itemId];
+    if (completing) {
+      recordCompletionToday();
+      setStreak(currentStreak());
+    }
+    update({
+      ...store,
+      plans: {
+        ...store.plans,
+        [store.activeId]: {
+          ...active,
+          tracker: { ...active.tracker, [itemId]: completing },
+          updatedAt: new Date().toISOString(),
+        },
+      },
+    });
+  };
+
+  const selectPlan = (planId: string) => {
+    const entry = store.plans[planId];
+    if (!entry) return;
+    setSelections(entry.selections);
+    update({ ...store, activeId: planId });
+    setView("plan");
+  };
+
+  const deletePlan = (planId: string) => {
+    const plans = { ...store.plans };
+    delete plans[planId];
+    update({ plans, activeId: store.activeId === planId ? null : store.activeId });
+  };
+
+  const backToHome = () => {
+    update({ ...store, activeId: null });
     setView("input");
   };
 
@@ -128,16 +176,17 @@ export default function Home() {
     <main className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:py-16">
       {view === "input" && (
         <div className="mx-auto max-w-2xl">
-          <header className="mb-10 text-center">
+          <header className="fade-up mb-10 text-center">
             <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
               Learn<span className="text-sky-400">X</span>
             </h1>
             <p className="mx-auto mt-3 max-w-xl text-lg text-white/60">
-              Paste a job description or name your goal. Our agents research the company, map your skill gap, and
-              build a learning plan from <span className="text-emerald-300">100% free resources</span> — with a
-              tracker to get you there.
+              Paste the job. Get the plan. Land the role —{" "}
+              <span className="text-emerald-300">without paying for a single course.</span>
             </p>
           </header>
+
+          <PlanLibrary store={store} onSelect={selectPlan} onDelete={deletePlan} />
 
           <PromptBox
             value={prompt}
@@ -186,7 +235,9 @@ export default function Home() {
             />
           </div>
 
-          {error && <p className="mt-4 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p>}
+          {error && (
+            <p className="mt-4 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p>
+          )}
 
           <button
             onClick={generate}
@@ -198,6 +249,61 @@ export default function Home() {
           <p className="mt-3 text-center text-xs text-white/35">
             Free resources only · free certifications anyone can take · every link verified
           </p>
+
+          {/* ——— Landing sections ——— */}
+          <section className="mt-20">
+            <h2 className="mb-6 text-center text-2xl font-bold">How it works</h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {HOW_IT_WORKS.map((s, i) => (
+                <div key={s.title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-2xl">{s.icon}</span>
+                    <span className="text-xs font-semibold text-white/30">STEP {i + 1}</span>
+                  </div>
+                  <h3 className="font-semibold">{s.title}</h3>
+                  <p className="mt-1 text-sm text-white/60">{s.text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="mb-2 text-center text-2xl font-bold">Why LearnX</h2>
+            <p className="mb-6 text-center text-sm text-white/50">
+              Course catalogs recommend what they sell. We recommend what&rsquo;s actually free — and exactly what{" "}
+              <em>this job</em> needs.
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {FEATURES.map((f) => (
+                <div key={f.title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                  <h3 className="font-semibold">
+                    <span className="mr-2">{f.icon}</span>
+                    {f.title}
+                  </h3>
+                  <p className="mt-1 text-sm leading-relaxed text-white/60">{f.text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-16">
+            <h2 className="mb-6 text-center text-2xl font-bold">Questions</h2>
+            <div className="space-y-2">
+              {FAQ.map((item) => (
+                <details key={item.q} className="group rounded-xl border border-white/10 bg-white/5 p-4">
+                  <summary className="cursor-pointer list-none font-medium marker:hidden">
+                    <span className="mr-2 inline-block text-sky-400 transition group-open:rotate-90">▸</span>
+                    {item.q}
+                  </summary>
+                  <p className="mt-2 pl-6 text-sm leading-relaxed text-white/60">{item.a}</p>
+                </details>
+              ))}
+            </div>
+          </section>
+
+          <footer className="mt-16 border-t border-white/10 pt-6 text-center text-xs text-white/30">
+            LearnX — open learning, honestly linked. Built with a verified free-resource index, link-checked weekly.
+          </footer>
         </div>
       )}
 
@@ -209,15 +315,16 @@ export default function Home() {
         </div>
       )}
 
-      {view === "plan" && plan && (
+      {view === "plan" && active && (
         <PlanView
-          plan={plan}
-          tracker={tracker}
+          plan={active.plan}
+          tracker={active.tracker}
           onToggleItem={toggleItem}
           onAddGoal={addGoal}
-          onStartOver={startOver}
-          demo={demo}
-          hoursPerWeek={selections.hoursPerWeek}
+          onStartOver={backToHome}
+          demo={active.demo}
+          hoursPerWeek={active.selections.hoursPerWeek}
+          streak={streak}
         />
       )}
     </main>
