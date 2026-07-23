@@ -75,6 +75,15 @@ export function recordCompletionToday(): void {
   }
 }
 
+export function hasCompletedToday(): boolean {
+  try {
+    const days: string[] = JSON.parse(localStorage.getItem(STREAK_KEY) || "[]");
+    return days.includes(new Date().toISOString().slice(0, 10));
+  } catch {
+    return false;
+  }
+}
+
 /** Consecutive learning days ending today (or yesterday, so a streak isn't dead at breakfast). */
 export function currentStreak(): number {
   let days: string[];

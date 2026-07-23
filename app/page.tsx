@@ -9,12 +9,21 @@ import SharedPlanPreview from "@/components/SharedPlanPreview";
 import {
   currentStreak,
   emptySelections,
+  hasCompletedToday,
   loadStore,
   recordCompletionToday,
   saveStore,
   type PlanStore,
 } from "@/lib/plans-store";
 import { decodePlanFromShare } from "@/lib/share";
+import { getReduceMotion, setReduceMotion } from "@/lib/motion";
+import {
+  enableNotifications,
+  disableNotifications,
+  maybeNudgeStreak,
+  notificationsEnabled,
+  notificationsSupported,
+} from "@/lib/notifications";
 import type { LearningPlan, Selections } from "@/lib/types";
 
 const PIPELINE_STEPS = [
@@ -84,12 +93,21 @@ export default function Home() {
   const [error, setError] = useState("");
   const [step, setStep] = useState(0);
   const [sharedPlan, setSharedPlan] = useState<LearningPlan | null>(null);
+  const [calmMode, setCalmMode] = useState(false);
+  const [notifsOn, setNotifsOn] = useState(false);
+  const [notifsSupported, setNotifsSupported] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [learnMoreOpen, setLearnMoreOpen] = useState(false);
 
   // Restore the plan library on load; handle an incoming shared-plan link first.
   useEffect(() => {
     const s = loadStore();
     setStore(s);
     setStreak(currentStreak());
+    setCalmMode(getReduceMotion());
+    setNotifsSupported(notificationsSupported());
+    setNotifsOn(notificationsEnabled());
+    if (notificationsEnabled()) maybeNudgeStreak(hasCompletedToday());
 
     const sharedParam = new URLSearchParams(window.location.search).get("shared");
     if (sharedParam) {
@@ -128,7 +146,8 @@ export default function Home() {
   const applySample = (sample: (typeof SAMPLES)[number]) => {
     setPrompt(sample.prompt);
     setSelections((s) => ({ ...s, ...sample.selections }));
-    document.getElementById("build-plan-btn")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setCustomizeOpen(true); // so users can see (and tweak) what the sample filled in
+    document.getElementById("build-plan-btn")?.scrollIntoView({ behavior: calmMode ? "auto" : "smooth", block: "center" });
   };
 
   const generate = async () => {
@@ -289,15 +308,58 @@ export default function Home() {
     setView("input");
   };
 
+  const toggleCalmMode = () => {
+    const next = !calmMode;
+    setCalmMode(next);
+    setReduceMotion(next);
+  };
+
+  const toggleNotifications = async () => {
+    if (notifsOn) {
+      disableNotifications();
+      setNotifsOn(false);
+      return;
+    }
+    setNotifsOn(await enableNotifications());
+  };
+
   return (
     <main className="mx-auto min-h-screen max-w-4xl px-4 py-10 sm:py-16">
+      {/* Focus-friendly settings — always reachable, never in the way */}
+      <div className="fixed right-3 top-3 z-30 flex gap-2">
+        <button
+          onClick={toggleCalmMode}
+          title="Turn off confetti and other motion"
+          className={`rounded-full border px-3 py-1.5 text-xs shadow-lg backdrop-blur transition ${
+            calmMode
+              ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-200"
+              : "border-white/15 bg-[#12182a]/80 text-white/60 hover:bg-white/10"
+          }`}
+        >
+          🌙 Calm mode{calmMode ? ": on" : ""}
+        </button>
+        {notifsSupported && (
+          <button
+            onClick={toggleNotifications}
+            title="Silent desktop reminders — no sound, never spammy"
+            className={`rounded-full border px-3 py-1.5 text-xs shadow-lg backdrop-blur transition ${
+              notifsOn
+                ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-200"
+                : "border-white/15 bg-[#12182a]/80 text-white/60 hover:bg-white/10"
+            }`}
+          >
+            🔔 Reminders{notifsOn ? ": on" : ""}
+          </button>
+        )}
+      </div>
+
       {view === "shared" && sharedPlan && (
         <SharedPlanPreview plan={sharedPlan} onImport={importSharedPlan} onDismiss={dismissSharedPlan} />
       )}
 
       {view === "input" && (
         <div className="mx-auto max-w-2xl">
-          <header className="fade-up mb-10 text-center">
+          <header className={`mb-10 text-center ${calmMode ? "" : "fade-up"}`}>
             <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
               Learn<span className="text-sky-400">X</span>
             </h1>
@@ -330,44 +392,55 @@ export default function Home() {
             }
           />
 
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <SelectField
-              label="Education level"
-              value={selections.education}
-              onChange={setSel("education")}
-              options={["High school", "Associate degree", "Bachelor's", "Master's", "PhD", "Bootcamp / self-taught"]}
-            />
-            <SelectField
-              label="Relevant experience"
-              value={selections.experience}
-              onChange={setSel("experience")}
-              options={["None yet", "< 1 year", "1–3 years", "3–5 years", "5–10 years", "10+ years"]}
-            />
-            <SelectField
-              label="Hours per week to learn"
-              value={selections.hoursPerWeek}
-              onChange={setSel("hoursPerWeek")}
-              options={["< 5 hours", "5–10 hours", "10–20 hours", "20+ hours"]}
-            />
-            <SelectField
-              label="Target timeline"
-              value={selections.timeline}
-              onChange={setSel("timeline")}
-              options={["2 weeks (interview soon!)", "1 month", "3 months", "6 months", "No deadline"]}
-            />
-          </div>
+          <details
+            open={customizeOpen}
+            onToggle={(e) => setCustomizeOpen((e.target as HTMLDetailsElement).open)}
+            className="group mt-4 rounded-2xl border border-white/10 bg-white/5 p-4"
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-medium text-white/70 marker:hidden">
+              <span>⚙️ Customize your plan <span className="font-normal text-white/40">(optional — we'll assume sensible defaults)</span></span>
+              <span className="text-sky-400 transition group-open:rotate-90">▸</span>
+            </summary>
 
-          <div className="mt-4">
-            <span className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/50">
-              Your current role / background (optional)
-            </span>
-            <PromptBox
-              value={selections.background}
-              onChange={setSel("background")}
-              placeholder='e.g. "Accountant, strong Excel, no SQL" — or leave blank and we’ll figure it out'
-              rows={2}
-            />
-          </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <SelectField
+                label="Education level"
+                value={selections.education}
+                onChange={setSel("education")}
+                options={["High school", "Associate degree", "Bachelor's", "Master's", "PhD", "Bootcamp / self-taught"]}
+              />
+              <SelectField
+                label="Relevant experience"
+                value={selections.experience}
+                onChange={setSel("experience")}
+                options={["None yet", "< 1 year", "1–3 years", "3–5 years", "5–10 years", "10+ years"]}
+              />
+              <SelectField
+                label="Hours per week to learn"
+                value={selections.hoursPerWeek}
+                onChange={setSel("hoursPerWeek")}
+                options={["< 5 hours", "5–10 hours", "10–20 hours", "20+ hours"]}
+              />
+              <SelectField
+                label="Target timeline"
+                value={selections.timeline}
+                onChange={setSel("timeline")}
+                options={["2 weeks (interview soon!)", "1 month", "3 months", "6 months", "No deadline"]}
+              />
+            </div>
+
+            <div className="mt-4">
+              <span className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/50">
+                Your current role / background (optional)
+              </span>
+              <PromptBox
+                value={selections.background}
+                onChange={setSel("background")}
+                placeholder='e.g. "Accountant, strong Excel, no SQL" — or leave blank and we’ll figure it out'
+                rows={2}
+              />
+            </div>
+          </details>
 
           {error && (
             <p className="mt-4 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</p>
@@ -402,51 +475,63 @@ export default function Home() {
             </div>
           </section>
 
-          <section className="mt-16">
-            <h2 className="mb-2 text-center text-2xl font-bold">Why LearnX</h2>
-            <p className="mb-6 text-center text-sm text-white/50">
-              Course catalogs recommend what they sell. We recommend what&rsquo;s actually free — and exactly what{" "}
-              <em>this job</em> needs.
-            </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {FEATURES.map((f) => (
-                <div key={f.title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                  <h3 className="font-semibold">
-                    <span className="mr-2">{f.icon}</span>
-                    {f.title}
-                  </h3>
-                  <p className="mt-1 text-sm leading-relaxed text-white/60">{f.text}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 text-center">
-              <button
-                onClick={() => document.getElementById("build-plan-btn")?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                className="rounded-full border border-sky-400/30 bg-sky-400/10 px-5 py-2 text-sm font-medium text-sky-200 transition hover:bg-sky-400/20"
-              >
-                Try it now ↑
-              </button>
-            </div>
-          </section>
+          {/* Deeper marketing content — collapsed by default so the first screen stays short and decision-light */}
+          <details
+            open={learnMoreOpen}
+            onToggle={(e) => setLearnMoreOpen((e.target as HTMLDetailsElement).open)}
+            className="group mt-16"
+          >
+            <summary className="mx-auto flex w-fit cursor-pointer list-none items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2 text-sm text-white/60 marker:hidden hover:bg-white/10">
+              Why LearnX, free resources &amp; FAQ
+              <span className="text-sky-400 transition group-open:rotate-90">▸</span>
+            </summary>
 
-          <section className="mt-16">
-            <h2 className="mb-6 text-center text-2xl font-bold">Questions</h2>
-            <div className="space-y-2">
-              {FAQ.map((item) => (
-                <details key={item.q} className="group rounded-xl border border-white/10 bg-white/5 p-4">
-                  <summary className="cursor-pointer list-none font-medium marker:hidden">
-                    <span className="mr-2 inline-block text-sky-400 transition group-open:rotate-90">▸</span>
-                    {item.q}
-                  </summary>
-                  <p className="mt-2 pl-6 text-sm leading-relaxed text-white/60">{item.a}</p>
-                </details>
-              ))}
-            </div>
-          </section>
+            <section className="mt-8">
+              <h2 className="mb-2 text-center text-2xl font-bold">Why LearnX</h2>
+              <p className="mb-6 text-center text-sm text-white/50">
+                Course catalogs recommend what they sell. We recommend what&rsquo;s actually free — and exactly what{" "}
+                <em>this job</em> needs.
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {FEATURES.map((f) => (
+                  <div key={f.title} className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                    <h3 className="font-semibold">
+                      <span className="mr-2">{f.icon}</span>
+                      {f.title}
+                    </h3>
+                    <p className="mt-1 text-sm leading-relaxed text-white/60">{f.text}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => document.getElementById("build-plan-btn")?.scrollIntoView({ behavior: calmMode ? "auto" : "smooth", block: "center" })}
+                  className="rounded-full border border-sky-400/30 bg-sky-400/10 px-5 py-2 text-sm font-medium text-sky-200 transition hover:bg-sky-400/20"
+                >
+                  Try it now ↑
+                </button>
+              </div>
+            </section>
 
-          <footer className="mt-16 border-t border-white/10 pt-6 text-center text-xs text-white/30">
-            LearnX — open learning, honestly linked. Built with a verified free-resource index, link-checked weekly.
-          </footer>
+            <section className="mt-16">
+              <h2 className="mb-6 text-center text-2xl font-bold">Questions</h2>
+              <div className="space-y-2">
+                {FAQ.map((item) => (
+                  <details key={item.q} className="group rounded-xl border border-white/10 bg-white/5 p-4">
+                    <summary className="cursor-pointer list-none font-medium marker:hidden">
+                      <span className="mr-2 inline-block text-sky-400 transition group-open:rotate-90">▸</span>
+                      {item.q}
+                    </summary>
+                    <p className="mt-2 pl-6 text-sm leading-relaxed text-white/60">{item.a}</p>
+                  </details>
+                ))}
+              </div>
+            </section>
+
+            <footer className="mt-16 border-t border-white/10 pt-6 text-center text-xs text-white/30">
+              LearnX — open learning, honestly linked. Built with a verified free-resource index, link-checked weekly.
+            </footer>
+          </details>
         </div>
       )}
 
@@ -471,6 +556,7 @@ export default function Home() {
           demo={active.demo}
           hoursPerWeek={active.selections.hoursPerWeek}
           streak={streak}
+          calmMode={calmMode}
         />
       )}
     </main>

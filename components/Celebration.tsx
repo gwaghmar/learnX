@@ -6,13 +6,14 @@ const EMOJI = ["🎉", "✨", "🎊", "⭐", "💪", "🔥"];
 
 /**
  * Lightweight confetti burst — re-renders a fresh particle set whenever
- * `trigger` increments, no libraries.
+ * `trigger` increments, no libraries. Skipped entirely in Calm Mode so
+ * motion-sensitive or easily-distracted users aren't pulled off task.
  */
-export default function Celebration({ trigger }: { trigger: number }) {
+export default function Celebration({ trigger, disabled }: { trigger: number; disabled?: boolean }) {
   const [particles, setParticles] = useState<Array<{ id: number; left: number; delay: number; emoji: string }>>([]);
 
   useEffect(() => {
-    if (!trigger) return;
+    if (!trigger || disabled) return;
     const batch = Array.from({ length: 18 }, (_, i) => ({
       id: trigger * 100 + i,
       left: 10 + Math.random() * 80,
@@ -22,7 +23,7 @@ export default function Celebration({ trigger }: { trigger: number }) {
     setParticles(batch);
     const t = setTimeout(() => setParticles([]), 1600);
     return () => clearTimeout(t);
-  }, [trigger]);
+  }, [trigger, disabled]);
 
   if (!particles.length) return null;
   return (

@@ -65,6 +65,19 @@ export function thisWeekToICS(items: PlanItem[], role: string): string {
   return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//LearnX//Plan//EN", ...events, "END:VCALENDAR"].join("\r\n");
 }
 
+/**
+ * Plain-text checklist of "this week" — a one-click alternative to manually
+ * retyping the plan into Todoist/Reminders/Notion. Pairs with the .ics export.
+ */
+export function thisWeekToChecklist(items: PlanItem[], role: string): string {
+  const lines = [`LearnX — ${role} — this week:`, ""];
+  for (const item of items) {
+    lines.push(`☐ ${item.title} (~${item.estimatedHours}h)`);
+    for (const r of item.resources) lines.push(`   ${r.url}`);
+  }
+  return lines.join("\n");
+}
+
 export function downloadFile(filename: string, content: string, mime: string): void {
   const blob = new Blob([content], { type: mime });
   const url = URL.createObjectURL(blob);

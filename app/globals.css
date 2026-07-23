@@ -35,3 +35,11 @@ body {
 .fade-up {
   animation: fade-up 0.5s ease-out both;
 }
+
+/* Safety net for OS-level "reduce motion" even if the in-app Calm Mode
+   toggle hasn't been touched — real accessibility, not just aesthetics. */
+@media (prefers-reduced-motion: reduce) {
+  .recording, .confetti, .fade-up {
+    animation: none !important;
+  }
+}

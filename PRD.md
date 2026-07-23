@@ -65,8 +65,18 @@ Per `MARKET_ANALYSIS.md`, chat assistants can generate a decent plan once. Learn
 - **Spoken interview questions** — 🔊 read-aloud on every drill question via the Web Speech API, pairing with the existing tap-to-speak input
 - **Copy-link** action on every resource
 
+### 🚀 v1.2 — attention-friendly pass (ADHD-friendly by design)
+- **Focus Mode** — one task at a time, full-screen, nothing else competing for attention: title, why, resources, a built-in 5/15/25/45-min timer, and exactly two decisions (Done / Do this later). A "skip from plan" link stays one tap further away so it's never an accidental click.
+- **Collapsible phases** — only the current phase (the earliest with incomplete work) is open by default; others collapse to a one-line progress summary. The plan reads as one chunk, not a wall of tasks.
+- **"Start next" button** — a single always-visible action that jumps straight to the next thing to do, removing the task-selection step entirely.
+- **Progressive disclosure on entry** — the profile selectors collapse behind "Customize your plan (optional)," and deeper marketing content ("Why LearnX," FAQ) collapses behind "Learn more" — the first screen is just: samples, prompt, one button.
+- **Calm Mode** — a persistent toggle (defaulting to the OS's `prefers-reduced-motion` setting) that turns off confetti and animation entirely; a CSS-level `prefers-reduced-motion` rule backs it up even without the toggle.
+- **Silent desktop reminders** — opt-in, no sound, ever: a notification when a focus-timer session ends, and at most one gentle nudge a day if the streak hasn't been touched yet. Tab must be open (no backend/push yet — see v2).
+- **Copy-as-checklist** — one click copies "this week" as a plain-text checklist for pasting into Todoist/Reminders/Notion, on top of the existing .ics export.
+
 ### 🔜 Next (v2)
-- Accounts + Postgres persistence (Supabase): plans sync across devices; email nudges ("your 8 hours start tonight")
+- Accounts + Postgres persistence (Supabase): plans sync across devices
+- Background push notifications (service worker) so reminders work even with the tab closed — today's notifications only fire while the tab is open
 - Resource index at 300+ entries across non-tech roles; auto-repair pipeline for broken entries
 - Business-readiness mode: "I want to run X business" → operations/finance/marketing plan
 - Mock-interview chat (voice) built on the same company research

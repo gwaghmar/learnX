@@ -18,6 +18,8 @@ On top of the pipeline: a **plan library** (multiple concurrent plans, switch/re
 
 Every part of the plan is actionable, not just readable: **swap** any resource for a different free one covering the same skill (instant via the verified index, or AI-generated on demand), **skip** an item you don't need without losing it, jot a **note** on any item, click a **skill-gap chip** to jump straight to where it's covered, and **share** a read-only link to your plan that others can preview and add to their own library in one click.
 
+**Designed for attention, not against it:** a **Focus Mode** shows exactly one task at a time (with a built-in 5/15/25/45-minute timer and just two decisions — Done or Do this later), phases collapse to the one you're actually on, a "Start next" button removes the task-selection step, the profile form and marketing content hide behind optional disclosures so the first screen is short, a **Calm Mode** toggle kills confetti/animation (defaulting to your OS's reduced-motion setting), and opt-in **silent desktop reminders** (no sound, at most one nudge a day) help without nagging.
+
 **Certification rule:** only certifications any member of the public can take for free are recommended (freeCodeCamp, Google Skillshop, HubSpot Academy, CFI free courses, Kaggle, CS50). Certifications that require an employer to license the system (Workday Pro, NetSuite, customer-tied SAP certs) are explicitly excluded, with free public alternatives suggested instead.
 
 ## Quickstart
@@ -43,9 +45,11 @@ components/
   PromptBox.tsx            # textarea + Web Speech API mic button
   SelectField.tsx          # selector that always offers "Help me figure out"
   PlanLibrary.tsx           # saved-plans list on the home screen (resume/delete)
-  PlanView.tsx             # company research, clickable skill-gap chips, phases (skip/note/swap/copy per item), tracker, add-a-goal, exports, streak, share, toast
+  PlanView.tsx             # company research, clickable skill-gap chips, collapsible phases (skip/note/swap/copy per item), tracker, add-a-goal, exports, streak, share, Focus Mode entry, toast
+  FocusMode.tsx              # one task at a time: title/why/resources, timer, Done / Do this later
+  FocusTimer.tsx             # 5/15/25/45-min countdown used by Focus Mode
   InterviewDrill.tsx        # flashcard-style practice questions with reveal + 🔊 read-aloud
-  Celebration.tsx           # confetti burst on item completion
+  Celebration.tsx           # confetti burst on item completion (skipped in Calm Mode)
   SharedPlanPreview.tsx      # read-only view of an imported shared-plan link, with "add to my plans" CTA
 lib/
   ai.ts                    # OpenRouter client (abort, web-search ':online', citations), URL fetcher
@@ -55,8 +59,10 @@ lib/
   resource-index.ts        # skill-matching + prompt injection for the index
   verify-links.ts          # HEAD-check every resource URL (also used for single-resource swaps), safe search-URL fallbacks
   plans-store.ts            # multi-plan localStorage store + per-item meta (skip/note) + streak tracking + v0 migration
-  export.ts                 # plan → Markdown, "this week" → .ics calendar
+  export.ts                 # plan → Markdown, "this week" → .ics calendar + plain-text checklist
   share.ts                  # plan ↔ shareable URL codec (unicode-safe base64, no backend)
+  motion.ts                  # Calm Mode preference (defaults to OS prefers-reduced-motion)
+  notifications.ts           # silent desktop reminders: opt-in, permission-gated, ≤1 streak nudge/day
   demo-plan.ts             # keyless demo plan
   types.ts                 # LearningPlan, Phase, PlanItem, Resource, TrackerState, ItemMeta
 scripts/
@@ -75,8 +81,10 @@ See [`PRD.md`](./PRD.md) for the full spec. Snapshot:
 - [x] Verified resource index + weekly CI link checker + live-cited company research + "this week" view
 - [x] **v1:** plan library (multiple plans), interview drill mode, streaks + celebration, Markdown/.ics export, full landing page
 - [x] **v1.1:** swap any resource, skip/note per item, shareable plan links, sample-JD quick-start, spoken interview questions
+- [x] **v1.2:** Focus Mode + timer, collapsible phases, "Start next" button, progressive disclosure, Calm Mode, silent desktop reminders, copy-as-checklist
 - [ ] Grow the resource index (target 300+ entries across non-tech roles) + auto-repair broken entries
 - [ ] Accounts + Postgres persistence (cross-device sync)
+- [ ] Background push notifications (works with the tab closed)
 - [ ] Business-readiness mode ("I want to start X business — make me ready to run it")
 - [ ] Mock-interview voice chat
 - [ ] B2B2C: career centers, workforce boards, bootcamps
